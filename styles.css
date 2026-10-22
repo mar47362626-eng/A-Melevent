@@ -502,7 +502,7 @@ body.drawer-open { overflow: hidden; }
 .hub-page { min-height: 100vh; color: var(--ink); }
 .hub-shell { width: 100%; min-height: 100vh; margin: 0; padding: clamp(20px, 3vw, 42px) clamp(16px, 4vw, 64px) 64px; }
 .hub-shell:fullscreen { overflow-y: auto; background: #f5f2ed; }
-.hub-header { display: flex; align-items: center; gap: 22px; padding: 10px 0 24px; border-bottom: 1px solid var(--line); }
+.hub-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 22px; padding: 10px 0 16px; border-bottom: 1px solid var(--line); background: #f5f2ed; box-shadow: 0 8px 16px rgb(41 37 31 / 4%); }
 .hub-header-copy { flex: 1; }
 .hub-header-copy .eyebrow { color: var(--accent); }
 .hub-header-copy h1 { margin: 3px 0 0; font-size: clamp(26px, 4vw, 36px); }
