@@ -843,10 +843,12 @@ test("stores hub staff credentials and verification state in Supabase", async ()
     });
   });
   const accounts = await store.read("hub-staff.json");
+  assert.equal(accounts[0].id, savedAccount.id);
   assert.equal(accounts[0].email, "hub@example.com");
   assert.equal(accounts[0].passwordSalt, passwordSalt);
   assert.equal(accounts[0].passwordHash, passwordHash);
   assert.equal(accounts[0].verificationTokenHash, "a".repeat(64));
+  assert.ok(savedAccount.id);
   assert.ok(requests.some((request) => request.url.endsWith("/rest/v1/hub_staff_accounts")));
   assert.ok(requests.every((request) => request.options.headers.apikey === "test-service-role-key"));
 });

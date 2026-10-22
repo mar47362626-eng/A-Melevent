@@ -341,6 +341,7 @@ class SupabaseStore {
       case "hub-staff.json":
         return this.syncRows(before, after, (row) => row.email, async (row, previous) => {
           const record = {
+            id: row.id,
             email: row.email,
             password_salt: row.passwordSalt,
             password_hash: row.passwordHash,
