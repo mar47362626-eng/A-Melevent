@@ -766,6 +766,9 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   assert.match(userAppPage, /data-app-bag/);
   const shortUserAppResponse = await fetch(`${baseUrl}/app`);
   assert.equal(shortUserAppResponse.status, 200);
+  const extensionlessUserAppResponse = await fetch(`${baseUrl}/user.app`);
+  assert.equal(extensionlessUserAppResponse.status, 200);
+  assert.match(await extensionlessUserAppResponse.text(), /id="product-grid"/);
   const hubPageResponse = await fetch(`${baseUrl}/hub.html`);
   assert.equal(hubPageResponse.status, 200);
   const hubPage = await hubPageResponse.text();

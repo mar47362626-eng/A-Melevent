@@ -31,6 +31,7 @@ const STATIC_FILES = new Map([
   ["/admin", ["admin.html", "text/html; charset=utf-8"]],
   ["/hub", ["hub.html", "text/html; charset=utf-8"]],
   ["/app", ["user.app.html", "text/html; charset=utf-8"]],
+  ["/user.app", ["user.app.html", "text/html; charset=utf-8"]],
   ...["index.html", "shop-all.html", "wigs.html", "beauty.html", "fragrance.html", "shoes.html", "account.html", "checkout.html", "payment.html", "admin.html", "hub.html", "user.app.html"]
     .map((name) => [`/${name}`, [name, "text/html; charset=utf-8"]]),
   ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
