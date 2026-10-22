@@ -375,7 +375,9 @@ test("protects admin dashboard and supports verified order fulfillment actions",
     headers: { Cookie: hubCookie },
   });
   assert.equal(hubOrderAccess.status, 200);
-  assert.equal((await hubOrderAccess.json()).order.id, testOrderId);
+  const hubOrder = (await hubOrderAccess.json()).order;
+  assert.equal(hubOrder.id, testOrderId);
+  assert.equal(hubOrder.items[0].image, "photo-1534528741775-53994a69daeb");
   const authenticatedSession = await fetch(`${baseUrl}/api/admin/session`, {
     headers: { Cookie: adminCookie },
   });
@@ -760,6 +762,7 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   assert.equal(hubPageResponse.status, 200);
   const hubPage = await hubPageResponse.text();
   assert.match(hubPage, /A&M Fulfillment Hub/);
+  assert.match(hubPage, /id="hub-fullscreen"/);
   assert.doesNotMatch(hubPage, /Admin workspace/);
   const shortHubPageResponse = await fetch(`${baseUrl}/hub`);
   assert.equal(shortHubPageResponse.status, 200);

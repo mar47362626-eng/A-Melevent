@@ -57,6 +57,20 @@ function nextHubAction(order) {
   return null;
 }
 
+function productImageSource(image) {
+  if (typeof image !== "string" || !image) return "";
+  if (/^\/api\/product-images\/[a-f0-9-]{36}\.(?:jpg|png|webp|gif|avif|bmp)$/i.test(image)) return image;
+  if (/^photo-[a-zA-Z0-9-]+$/.test(image)) {
+    return `https://images.unsplash.com/${encodeURIComponent(image)}?auto=format&fit=crop&w=480&q=80`;
+  }
+  try {
+    const url = new URL(image);
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function showOrder(order) {
   activeOrder = order;
   orderPanel.hidden = false;
@@ -77,11 +91,32 @@ function showOrder(order) {
   itemsList.replaceChildren();
   for (const item of Array.isArray(order.items) ? order.items : []) {
     const row = document.createElement("li");
+    const imageFrame = document.createElement("div");
+    imageFrame.className = "hub-item-image-frame";
+    const imageSource = productImageSource(item.image);
+    if (imageSource) {
+      const image = document.createElement("img");
+      image.src = imageSource;
+      image.alt = item.name ? `${item.name} product photo` : "Product photo";
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        image.hidden = true;
+        imageFrame.classList.add("is-unavailable");
+      }, { once: true });
+      imageFrame.append(image);
+    } else {
+      imageFrame.classList.add("is-unavailable");
+      imageFrame.setAttribute("role", "img");
+      imageFrame.setAttribute("aria-label", "Product photo unavailable");
+    }
+    const copy = document.createElement("div");
+    copy.className = "hub-item-copy";
     const name = document.createElement("strong");
     const quantity = document.createElement("span");
     name.textContent = item.name || "Product";
     quantity.textContent = `Quantity: ${item.quantity}`;
-    row.append(name, quantity);
+    copy.append(name, quantity);
+    row.append(imageFrame, copy);
     itemsList.append(row);
   }
 
@@ -272,6 +307,30 @@ document.querySelector("#hub-logout").addEventListener("click", async (event) =>
     button.disabled = false;
   }
 });
+
+const fullscreenButton = document.querySelector("#hub-fullscreen");
+function updateFullscreenButton() {
+  const isFullscreen = document.fullscreenElement === hubShell;
+  fullscreenButton.textContent = isFullscreen ? "Exit fullscreen" : "Enter fullscreen";
+  fullscreenButton.setAttribute("aria-pressed", String(isFullscreen));
+}
+
+fullscreenButton.addEventListener("click", async () => {
+  fullscreenButton.disabled = true;
+  try {
+    if (document.fullscreenElement === hubShell) {
+      await document.exitFullscreen();
+    } else {
+      await hubShell.requestFullscreen();
+    }
+  } catch (error) {
+    feedback.textContent = `Could not change fullscreen mode: ${error.message}`;
+  } finally {
+    fullscreenButton.disabled = false;
+    updateFullscreenButton();
+  }
+});
+document.addEventListener("fullscreenchange", updateFullscreenButton);
 
 requestApi("/api/hub/session")
   .then(({ authenticated }) => {
