@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f8f5f0" />
+    <title>Bank transfer — A&M</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="checkout.js" defer></script>
+  </head>
+  <body class="checkout-page" data-checkout-step="payment">
+    <header class="checkout-header">
+      <a class="brand" href="index.html" aria-label="A&M home">A<span>&</span>M<span class="brand-dot">.</span></a>
+      <a class="text-button" href="checkout.html">Back to order review ↗</a>
+    </header>
+    <main class="checkout-main payment-main">
+      <span class="eyebrow">Secure your order</span>
+      <h1>Bank <em>transfer.</em></h1>
+      <p class="checkout-intro">Transfer the full total below, including the delivery estimate for your saved address.</p>
+      <p class="checkout-feedback" id="checkout-feedback" role="status" aria-live="polite"></p>
+      <div class="checkout-layout" id="checkout-content" hidden>
+        <section class="checkout-card">
+          <span class="eyebrow">Transfer to</span>
+          <h2>A&M account</h2>
+          <dl class="bank-details">
+            <div><dt>Bank</dt><dd>Wema Bank</dd></div>
+            <div><dt>Account name</dt><dd>A$M</dd></div>
+            <div><dt>Account number</dt><dd>9138154963</dd></div>
+          </dl>
+          <div class="payment-price-breakdown">
+            <div><span>Items subtotal</span><strong data-items-subtotal></strong></div>
+            <div><span>Delivery</span><strong data-delivery-fee></strong></div>
+            <p data-delivery-note></p>
+            <div class="bank-amount"><span>Total to transfer</span><strong id="checkout-total"></strong></div>
+          </div>
+          <p class="payment-warning">Only choose “I have made the transfer” after you have sent the money. This does not automatically confirm payment. An A&M admin must verify it first.</p>
+          <button class="button button-dark checkout-continue" id="checkout-confirm-payment" type="button">I have made the transfer <span>↗</span></button>
+        </section>
+        <section class="checkout-card">
+          <span class="eyebrow">Order summary</span>
+          <h2>What you picked</h2>
+          <div class="checkout-items" id="checkout-items"></div>
+          <div class="checkout-total"><span>Items subtotal</span><strong data-items-subtotal></strong></div>
+          <div class="checkout-total"><span>Delivery</span><strong data-delivery-fee></strong></div>
+          <div class="checkout-total checkout-grand-total"><span>Total to transfer</span><strong id="checkout-total-summary"></strong></div>
+        </section>
+      </div>
+      <section class="checkout-card checkout-success" id="checkout-success" hidden>
+        <span class="eyebrow">Transfer submitted</span>
+        <h2>Your order is <em>pending.</em></h2>
+        <p>Your order reference is <strong id="order-reference"></strong>. A&M will verify your transfer and update your account when it is confirmed.</p>
+        <a class="button button-dark" href="account.html#orders">View my orders ↗</a>
+      </section>
+    </main>
+  </body>
+</html>

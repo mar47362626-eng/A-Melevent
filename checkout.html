@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f8f5f0" />
+    <title>Checkout — A&M</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="checkout.js" defer></script>
+  </head>
+  <body class="checkout-page" data-checkout-step="review">
+    <header class="checkout-header">
+      <a class="brand" href="index.html" aria-label="A&M home">A<span>&</span>M<span class="brand-dot">.</span></a>
+      <a class="text-button" href="shop-all.html">Back to shopping ↗</a>
+    </header>
+    <main class="checkout-main">
+      <span class="eyebrow">Your order, your way</span>
+      <h1>Review your <em>details.</em></h1>
+      <p class="checkout-intro">Check your delivery information and items before continuing to bank transfer.</p>
+      <p class="checkout-feedback" id="checkout-feedback" role="status" aria-live="polite"></p>
+      <div class="checkout-layout" id="checkout-content" hidden>
+        <section class="checkout-card">
+          <span class="eyebrow">Delivery to</span>
+          <h2 id="checkout-customer-name"></h2>
+          <address id="checkout-address"></address>
+          <p id="checkout-contact"></p>
+          <button class="text-button checkout-edit-address" id="edit-address-toggle" type="button" aria-expanded="false" aria-controls="delivery-address-form">Update delivery details ↗</button>
+          <form class="delivery-address-form" id="delivery-address-form" hidden>
+            <label>Street address<input name="address" autocomplete="street-address" maxlength="200" required /></label>
+            <div class="form-grid">
+              <label>City<input name="city" autocomplete="address-level2" maxlength="100" required /></label>
+              <label>State<input name="region" autocomplete="address-level1" maxlength="100" required /></label>
+            </div>
+            <button class="button button-dark" type="submit">Save delivery details</button>
+            <p class="address-form-message" id="address-form-message" role="status" aria-live="polite"></p>
+          </form>
+          <div class="checkout-payment-note">
+            <span class="eyebrow">Payment</span>
+            <strong>Bank transfer</strong>
+            <p>Pay on delivery is not available yet. Your order will stay pending until A&M verifies your transfer.</p>
+          </div>
+        </section>
+        <section class="checkout-card">
+          <span class="eyebrow">Your feel-good finds</span>
+          <h2>Order summary</h2>
+          <div class="checkout-items" id="checkout-items"></div>
+          <div class="checkout-total"><span>Items subtotal</span><strong data-items-subtotal></strong></div>
+          <div class="checkout-total"><span>Delivery</span><strong data-delivery-fee></strong></div>
+          <p class="checkout-delivery-note" data-delivery-note></p>
+          <div class="checkout-total checkout-grand-total"><span>Total to transfer</span><strong id="checkout-total"></strong></div>
+          <button class="button button-dark checkout-continue" id="checkout-continue" type="button">Continue to bank transfer <span>↗</span></button>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1,
+    "name": "The Everyday Curl",
+    "category": "Wigs",
+    "detail": "Soft curls · 18 inch",
+    "description": "A soft, curly look that brings a little extra personality to everyday outfits and dressed-up plans. Its 18-inch length gives you a defined, face-framing style.",
+    "price": 68000,
+    "tag": "Best loved",
+    "image": "photo-1534528741775-53994a69daeb"
+  },
+  {
+    "id": 2,
+    "name": "Dew Drop Face Cream",
+    "category": "Beauty",
+    "detail": "Daily moisture · 50 ml",
+    "description": "A simple daily moisturiser for adding a comfortable, hydrated feel to your skincare routine. The 50 ml size fits neatly on your shelf or in your travel bag. Check the product packaging for the full ingredient list and directions.",
+    "price": 14500,
+    "tag": "A little glow",
+    "image": "photo-1608248543803-ba4f8c70ae0b"
+  },
+  {
+    "id": 3,
+    "name": "Sunday Kind of Love",
+    "category": "Fragrance",
+    "detail": "Eau de parfum · 50 ml",
+    "description": "A 50 ml eau de parfum made for those days when you want your fragrance to feel like part of the outfit. A lovely pick for your own collection or a thoughtful gift.",
+    "price": 32000,
+    "tag": "New in",
+    "image": "photo-1541643600914-78b084683601"
+  },
+  {
+    "id": 4,
+    "name": "The Main Character",
+    "category": "Shoes",
+    "detail": "Sculpted heel · caramel",
+    "description": "A caramel-toned sculpted heel that makes an outfit feel considered, whether you are dressing for an occasion or adding a statement to a simple look.",
+    "price": 42500,
+    "tag": "A&M favourite",
+    "image": "photo-1543163521-1bf539c55dd2"
+  },
+  {
+    "id": 5,
+    "name": "Soft Life Straight",
+    "category": "Wigs",
+    "detail": "Silky straight · 20 inch",
+    "description": "A sleek, straight style with a 20-inch length for a polished look. Wear it as your everyday finish or style it up for plans after hours.",
+    "price": 75000,
+    "tag": "Feel yourself",
+    "image": "photo-1524504388940-b1c1722653e1"
+  },
+  {
+    "id": 6,
+    "name": "Sunday Skin Body Butter",
+    "category": "Beauty",
+    "detail": "Whipped & wonderful · 200 ml",
+    "description": "A 200 ml body butter for adding a little feel-good care to your daily routine. Its whipped texture makes it a lovely treat after a shower or whenever your skin needs a little extra comfort. Check the packaging for ingredients and directions.",
+    "price": 18500,
+    "tag": "Self-care pick",
+    "image": "photo-1601049541289-9b1b7bbbfe19"
+  },
+  {
+    "id": 7,
+    "name": "Soft Spoken",
+    "category": "Fragrance",
+    "detail": "Warm amber · 30 ml",
+    "description": "A 30 ml warm-amber fragrance that is easy to bring along for a day out or keep close for evening plans. A smaller size for trying a new scent or gifting someone special.",
+    "price": 24500,
+    "tag": "Your new scent",
+    "image": "photo-1594035910387-fea47794261f"
+  },
+  {
+    "id": 8,
+    "name": "The One More Look",
+    "category": "Shoes",
+    "detail": "Everyday sandal · cocoa",
+    "description": "A cocoa-toned everyday sandal that pairs easily with your casual favourites. A simple go-to for days when you want a comfortable-looking, put-together finish.",
+    "price": 38000,
+    "tag": "Easy does it",
+    "image": "photo-1560343090-f0409e92791a"
+  }
+]

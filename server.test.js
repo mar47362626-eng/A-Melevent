@@ -1,0 +1,636 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const http = require("node:http");
+const os = require("node:os");
+const path = require("node:path");
+const { randomBytes, scryptSync } = require("node:crypto");
+const { after, before, test } = require("node:test");
+const { createServer } = require("./server");
+
+let server;
+let baseUrl;
+let dataDir;
+let productsFile;
+let sessionCookie;
+let adminCookie;
+let testOrderId;
+
+async function post(route, body, cookie = sessionCookie) {
+  return fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function adminPost(route, body, cookie = adminCookie) {
+  return fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+before(async () => {
+  dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "am-store-test-"));
+  productsFile = path.join(dataDir, "products.json");
+  await fs.copyFile(path.join(__dirname, "data", "products.json"), productsFile);
+  const passwordSalt = randomBytes(16);
+  await fs.writeFile(path.join(dataDir, "admin.json"), `${JSON.stringify({
+    email: "owner@example.com",
+    passwordSalt: passwordSalt.toString("hex"),
+    passwordHash: scryptSync("test-admin-secret", passwordSalt, 64).toString("hex"),
+  })}\n`);
+  server = createServer({
+    dataDir,
+    productsFile,
+    brevoApiKey: "",
+    brevoSenderEmail: "",
+    adminSmsNumbers: "",
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+test("checks signed-out customer sessions without returning an authorization error", async () => {
+  const sessionResponse = await fetch(`${baseUrl}/api/session`);
+  assert.equal(sessionResponse.status, 200);
+  assert.deepEqual(await sessionResponse.json(), { customer: null });
+
+  const profileResponse = await fetch(`${baseUrl}/api/me`);
+  assert.equal(profileResponse.status, 401);
+});
+
+test("checks signed-out admin sessions without requesting the protected dashboard", async () => {
+  const sessionResponse = await fetch(`${baseUrl}/api/admin/session`);
+  assert.equal(sessionResponse.status, 200);
+  assert.deepEqual(await sessionResponse.json(), { authenticated: false });
+
+  const dashboardResponse = await fetch(`${baseUrl}/api/admin/dashboard`);
+  assert.equal(dashboardResponse.status, 401);
+});
+
+after(async () => {
+  await new Promise((resolve) => server.close(resolve));
+  await fs.rm(dataDir, { recursive: true, force: true });
+});
+
+test("registers customers with hashed passwords and creates a session", async () => {
+  const response = await post("/api/register", {
+    firstName: "Amina",
+    lastName: "Test",
+    email: "amina@example.com",
+    phone: "+234 801 234 5678",
+    password: "correct-horse",
+    address: "1 Test Street",
+    city: "Lagos",
+    region: "Lagos",
+  }, null);
+  assert.equal(response.status, 201);
+  const result = await response.json();
+  assert.equal(result.customer.email, "amina@example.com");
+  assert.equal("passwordHash" in result.customer, false);
+  const setCookie = response.headers.get("set-cookie");
+  assert.match(setCookie, /Path=\//i);
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Lax/i);
+  assert.match(setCookie, /Max-Age=604800/i);
+  sessionCookie = setCookie.split(";")[0];
+  assert.match(sessionCookie, /^am_session=/);
+
+  const users = JSON.parse(await fs.readFile(path.join(dataDir, "users.json"), "utf8"));
+  assert.equal(users.length, 1);
+  assert.notEqual(users[0].passwordHash, "correct-horse");
+  assert.equal(users[0].passwordHash.length, 128);
+  assert.equal(users[0].inbox.length, 1);
+  assert.equal(users[0].passwordHash.includes("correct-horse"), false);
+});
+
+test("rejects duplicate registrations and bad credentials", async () => {
+  const duplicate = await post("/api/register", {
+    firstName: "Amina",
+    lastName: "Test",
+    email: "AMINA@example.com",
+    phone: "+234 801 234 5678",
+    address: "1 Test Street",
+    city: "Lagos",
+    region: "Lagos",
+    password: "correct-horse",
+  }, null);
+  assert.equal(duplicate.status, 409);
+
+  const invalidLogin = await post("/api/login", {
+    email: "amina@example.com",
+    password: "wrong-password",
+  }, null);
+  assert.equal(invalidLogin.status, 401);
+});
+
+test("requires a delivery address to register", async () => {
+  const response = await post("/api/register", {
+    firstName: "No",
+    lastName: "Address",
+    email: "no-address@example.com",
+    phone: "+234 801 234 5678",
+    password: "correct-horse",
+    address: "1 Test Street",
+    city: "Lagos",
+  }, null);
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /delivery street address, city, state/i);
+});
+
+test("updates delivery address for the signed-in customer", async () => {
+  const response = await fetch(`${baseUrl}/api/me/address`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: sessionCookie,
+    },
+    body: JSON.stringify({
+      address: "22 New Street",
+      city: "Abuja",
+      region: "FCT",
+    }),
+  });
+  assert.equal(response.status, 200);
+  const { customer } = await response.json();
+  assert.equal(customer.address, "22 New Street");
+  assert.equal(customer.city, "Abuja");
+  assert.equal(customer.region, "FCT");
+  assert.equal("passwordHash" in customer, false);
+
+  const users = JSON.parse(await fs.readFile(path.join(dataDir, "users.json"), "utf8"));
+  assert.equal(users[0].address, "22 New Street");
+  assert.equal(users[0].city, "Abuja");
+  assert.equal(users[0].region, "FCT");
+
+  const quotes = [
+    { city: "Ibadan", region: "Oyo", fee: 3000, estimate: false },
+    { city: "Lagos", region: "Lagos State", fee: 3200, estimate: false },
+    { city: "Ilishan-Remo", region: "Ogun", fee: 4000, estimate: true },
+    { city: "Osogbo", region: "Osun", fee: 8000, estimate: true },
+    { city: "Abuja", region: "FCT", fee: 11000, estimate: true },
+  ];
+  for (const quote of quotes) {
+    const updateResponse = await fetch(`${baseUrl}/api/me/address`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: sessionCookie,
+      },
+      body: JSON.stringify({ address: "22 New Street", city: quote.city, region: quote.region }),
+    });
+    assert.equal(updateResponse.status, 200);
+    const quoteResponse = await fetch(`${baseUrl}/api/delivery/quote`, {
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(quoteResponse.status, 200);
+    const { delivery } = await quoteResponse.json();
+    assert.equal(delivery.fee, quote.fee, `${quote.city}, ${quote.region} fee`);
+    assert.equal(delivery.estimate, quote.estimate, `${quote.city}, ${quote.region} estimate flag`);
+    assert.equal(delivery.origin, "Ilishan-Remo, Ogun State");
+  }
+});
+
+test("keeps the customer session after a server restart and saves a server-priced order", async () => {
+  const productsResponse = await fetch(`${baseUrl}/api/products`);
+  assert.equal(productsResponse.status, 200);
+  const { products } = await productsResponse.json();
+  assert.equal(products.length, 8);
+  assert.equal(products.find((product) => product.id === 1).name, "The Everyday Curl");
+  const expectedSubtotal = products.find((product) => product.id === 1).price * 2
+    + products.find((product) => product.id === 2).price;
+
+  const profileResponse = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+  assert.equal(profileResponse.status, 200);
+  assert.equal((await profileResponse.json()).customer.firstName, "Amina");
+
+  const updateAddress = await fetch(`${baseUrl}/api/me/address`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: sessionCookie,
+    },
+    body: JSON.stringify({ address: "22 New Street", city: "Abuja", region: "FCT" }),
+  });
+  assert.equal(updateAddress.status, 200);
+
+  const orderResponse = await post("/api/orders", {
+    items: [{ id: 1, quantity: 2, price: 1 }, { id: 2, quantity: 1 }],
+  });
+  assert.equal(orderResponse.status, 201);
+  const { order } = await orderResponse.json();
+  testOrderId = order.id;
+  assert.equal(order.subtotal, expectedSubtotal);
+  assert.equal(order.deliveryFee, 11000);
+  assert.equal(order.deliveryEstimate, true);
+  assert.equal(order.total, expectedSubtotal + 11000);
+  assert.equal(order.items[0].price, products.find((product) => product.id === 1).price);
+  assert.equal(order.items[0].image, products.find((product) => product.id === 1).image);
+  assert.equal(order.items[0].quantity, 2);
+  assert.equal(order.items[1].image, products.find((product) => product.id === 2).image);
+  assert.equal(order.items[1].quantity, 1);
+  assert.match(order.status, /pending.*admin confirmation/i);
+  assert.equal(order.paymentMethod, "Bank transfer");
+  assert.equal(order.paymentStatus, "Pending admin confirmation");
+  assert.deepEqual(order.deliveryAddress, { street: "22 New Street", city: "Abuja", state: "FCT" });
+
+  const users = JSON.parse(await fs.readFile(path.join(dataDir, "users.json"), "utf8"));
+  const orders = JSON.parse(await fs.readFile(path.join(dataDir, "orders.json"), "utf8"));
+  assert.equal(users[0].orders[0].id, order.id);
+  assert.equal(users[0].inbox[0].subject, `Order ${order.id} received`);
+  assert.equal(orders[0].customerId, users[0].id);
+  assert.equal(orders[0].paymentStatus, "Pending admin confirmation");
+
+  const updatedProfile = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+  assert.equal((await updatedProfile.json()).customer.orders[0].paymentStatus, "Pending admin confirmation");
+
+  await new Promise((resolve) => server.close(resolve));
+  server = createServer({
+    dataDir,
+    productsFile,
+    brevoApiKey: "",
+    brevoSenderEmail: "",
+    adminSmsNumbers: "",
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const afterRestart = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+  assert.equal(afterRestart.status, 200);
+  assert.equal((await afterRestart.json()).customer.email, "amina@example.com");
+  const restoredSession = await fetch(`${baseUrl}/api/session`, { headers: { Cookie: sessionCookie } });
+  assert.equal(restoredSession.status, 200);
+  assert.equal((await restoredSession.json()).customer.email, "amina@example.com");
+});
+
+test("protects admin dashboard and supports verified order fulfillment actions", async () => {
+  const unauthorized = await fetch(`${baseUrl}/api/admin/dashboard`);
+  assert.equal(unauthorized.status, 401);
+
+  const customerAccess = await fetch(`${baseUrl}/api/admin/dashboard`, {
+    headers: { Cookie: sessionCookie },
+  });
+  assert.equal(customerAccess.status, 401);
+
+  const badLogin = await adminPost("/api/admin/login", {
+    email: "owner@example.com",
+    password: "wrong",
+  }, null);
+  assert.equal(badLogin.status, 401);
+
+  const login = await adminPost("/api/admin/login", {
+    email: "OWNER@example.com",
+    password: "test-admin-secret",
+  }, null);
+  assert.equal(login.status, 200);
+  const adminSetCookie = login.headers.get("set-cookie");
+  assert.match(adminSetCookie, /Path=\//i);
+  assert.match(adminSetCookie, /HttpOnly/i);
+  assert.match(adminSetCookie, /SameSite=Lax/i);
+  assert.match(adminSetCookie, /Max-Age=604800/i);
+  adminCookie = adminSetCookie.split(";")[0];
+
+  const unauthorizedProduct = await fetch(`${baseUrl}/api/admin/products`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(unauthorizedProduct.status, 401);
+  const customerProductAccess = await fetch(`${baseUrl}/api/admin/products/1`, {
+    method: "DELETE",
+    headers: { Cookie: sessionCookie },
+  });
+  assert.equal(customerProductAccess.status, 401);
+  const unauthorizedImageUpload = await adminPost("/api/admin/product-images", {
+    data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/S1sAAAAASUVORK5CYII=",
+  }, null);
+  assert.equal(unauthorizedImageUpload.status, 401);
+
+  const dashboardResponse = await fetch(`${baseUrl}/api/admin/dashboard`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(dashboardResponse.status, 200);
+  const authenticatedSession = await fetch(`${baseUrl}/api/admin/session`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.deepEqual(await authenticatedSession.json(), { authenticated: true });
+  await new Promise((resolve) => server.close(resolve));
+  server = createServer({
+    dataDir,
+    productsFile,
+    brevoApiKey: "",
+    brevoSenderEmail: "",
+    adminSmsNumbers: "",
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const restoredAdminSession = await fetch(`${baseUrl}/api/admin/session`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.deepEqual(await restoredAdminSession.json(), { authenticated: true });
+  const restoredDashboard = await fetch(`${baseUrl}/api/admin/dashboard`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(restoredDashboard.status, 200);
+  const dashboard = await dashboardResponse.json();
+  assert.equal(dashboard.summary.pendingPayments, 1);
+  assert.equal(dashboard.orders[0].id, testOrderId);
+  assert.equal(dashboard.orders[0].items[0].image, "photo-1534528741775-53994a69daeb");
+  assert.equal(dashboard.orders[0].items[1].image, "photo-1608248543803-ba4f8c70ae0b");
+  assert.equal(dashboard.products.length, 8);
+  assert.equal(dashboard.customers[0].email, "amina@example.com");
+  assert.equal("passwordHash" in dashboard.customers[0], false);
+
+  const newProduct = {
+    name: "Test Satin Bonnet",
+    category: "Beauty",
+    detail: "Adjustable satin sleep bonnet",
+    description: "A soft bonnet for protecting your hair overnight.",
+    price: 8500,
+    tag: "New",
+    image: "photo-1529139574466-a303027c1d8b",
+  };
+  const invalidImageUpload = await adminPost("/api/admin/product-images", { data: "data:image/png;base64,SGVsbG8=" });
+  assert.equal(invalidImageUpload.status, 400);
+  const imageData = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/S1sAAAAASUVORK5CYII=";
+  const imageUpload = await adminPost("/api/admin/product-images", { data: imageData });
+  assert.equal(imageUpload.status, 201);
+  newProduct.image = (await imageUpload.json()).image;
+  const storedImage = await fetch(`${baseUrl}${newProduct.image}`);
+  assert.equal(storedImage.status, 200);
+  assert.equal(storedImage.headers.get("content-type"), "image/png");
+  assert.equal(Buffer.from(await storedImage.arrayBuffer()).toString("base64"), imageData.split(",")[1]);
+
+  const invalidProduct = await adminPost("/api/admin/products", { ...newProduct, image: "javascript:alert(1)" });
+  assert.equal(invalidProduct.status, 400);
+  const createProduct = await adminPost("/api/admin/products", newProduct);
+  assert.equal(createProduct.status, 201);
+  const created = (await createProduct.json()).product;
+  assert.equal(created.id, 9);
+
+  const updateProduct = await fetch(`${baseUrl}/api/admin/products/${created.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({ ...newProduct, name: "Updated Satin Bonnet", price: 9000 }),
+  });
+  assert.equal(updateProduct.status, 200);
+  assert.equal((await updateProduct.json()).product.price, 9000);
+
+  const publicCatalog = await fetch(`${baseUrl}/api/products`);
+  assert.equal((await publicCatalog.json()).products.find((product) => product.id === created.id).name, "Updated Satin Bonnet");
+  const deleteProduct = await fetch(`${baseUrl}/api/admin/products/${created.id}`, {
+    method: "DELETE",
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(deleteProduct.status, 200);
+  const catalogAfterDelete = await fetch(`${baseUrl}/api/products`);
+  assert.equal((await catalogAfterDelete.json()).products.some((product) => product.id === created.id), false);
+  const persistedProducts = JSON.parse(await fs.readFile(productsFile, "utf8"));
+  assert.equal(persistedProducts.some((product) => product.id === created.id), false);
+  const savedOrders = JSON.parse(await fs.readFile(path.join(dataDir, "orders.json"), "utf8"));
+  assert.equal(savedOrders[0].items[0].image, "photo-1534528741775-53994a69daeb");
+
+  const confirmPayment = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "confirm_payment" });
+  assert.equal(confirmPayment.status, 200);
+  assert.equal((await confirmPayment.json()).order.paymentStatus, "Confirmed");
+
+  const processing = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "processing" });
+  assert.equal(processing.status, 200);
+  assert.equal((await processing.json()).order.status, "Processing");
+
+  const shipped = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "shipped" });
+  assert.equal(shipped.status, 200);
+  assert.equal((await shipped.json()).order.status, "Shipped");
+
+  const inTransit = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "in_transit" });
+  assert.equal(inTransit.status, 200);
+  assert.equal((await inTransit.json()).order.status, "In transit");
+
+  const delivered = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "delivered" });
+  assert.equal(delivered.status, 200);
+  assert.equal((await delivered.json()).order.status, "Delivered");
+
+  const invalidCancel = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "cancel" });
+  assert.equal(invalidCancel.status, 409);
+
+  const profileResponse = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+  const { customer } = await profileResponse.json();
+  assert.equal(customer.orders[0].status, "Delivered");
+  assert.equal(customer.orders[0].items[0].image, "photo-1534528741775-53994a69daeb");
+  assert.equal(customer.orders[0].items[0].quantity, 2);
+  assert.equal(customer.orders[0].items[1].image, "photo-1608248543803-ba4f8c70ae0b");
+  assert.match(customer.inbox[0].message, /Delivered/);
+
+  const customerLogin = await post("/api/login", {
+    email: "amina@example.com",
+    password: "correct-horse",
+  }, null);
+  assert.equal(customerLogin.status, 200);
+  assert.equal((await customerLogin.json()).customer.orders[0].status, "Delivered");
+
+  const logout = await adminPost("/api/admin/logout", {});
+  assert.equal(logout.status, 200);
+  const afterLogout = await fetch(`${baseUrl}/api/admin/dashboard`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(afterLogout.status, 401);
+});
+
+test("logs out and invalidates the server-side session", async () => {
+  const response = await post("/api/logout", {});
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
+
+  const profileResponse = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+  assert.equal(profileResponse.status, 401);
+});
+
+test("persists contact messages and newsletter sign-ups", async () => {
+  const messageResponse = await post("/api/messages", {
+    name: "Amina Test",
+    phone: "+234 801 234 5678",
+    message: "Do you have this wig in another length?",
+  }, null);
+  assert.equal(messageResponse.status, 201);
+  const messages = JSON.parse(await fs.readFile(path.join(dataDir, "messages.json"), "utf8"));
+  assert.equal(messages[0].name, "Amina Test");
+
+  const newsletterResponse = await post("/api/newsletter", { email: "news@example.com" }, null);
+  assert.equal(newsletterResponse.status, 201);
+  const subscribers = JSON.parse(await fs.readFile(path.join(dataDir, "newsletter.json"), "utf8"));
+  assert.equal(subscribers[0].email, "news@example.com");
+});
+
+test("sends Brevo welcome, customer/admin order emails, and transactional order SMS", async () => {
+  const notificationDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "am-brevo-test-"));
+  const notificationProductsFile = path.join(notificationDataDir, "products.json");
+  await fs.copyFile(path.join(__dirname, "data", "products.json"), notificationProductsFile);
+  const brevoRequests = [];
+  const notificationServer = createServer({
+    dataDir: notificationDataDir,
+    productsFile: notificationProductsFile,
+    brevoApiKey: "test-brevo-key",
+    brevoSenderEmail: "store@example.com",
+    notificationAdminEmail: "ayomideoluniyi49@gmail.com",
+    brevoSmsSender: "AMStore",
+    adminSmsNumbers: "2348000000001, 2348000000002",
+    publicSiteUrl: "https://shop.example.com",
+    fetchImpl: async (url, options) => {
+      brevoRequests.push({ url, options, body: JSON.parse(options.body) });
+      return { ok: true, status: 201 };
+    },
+  });
+  await new Promise((resolve, reject) => {
+    notificationServer.once("error", reject);
+    notificationServer.listen(0, "127.0.0.1", resolve);
+  });
+
+  try {
+    const notificationBaseUrl = `http://127.0.0.1:${notificationServer.address().port}`;
+    const registerResponse = await fetch(`${notificationBaseUrl}/api/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: "<Amina>",
+        lastName: "Test",
+        email: "brevo-customer@example.com",
+        phone: "+234 809 000 0001",
+        password: "correct-horse",
+        address: "1 Test Street",
+        city: "Lagos",
+        region: "Lagos",
+      }),
+    });
+    assert.equal(registerResponse.status, 201);
+    assert.equal(brevoRequests.length, 1);
+    assert.equal(brevoRequests[0].url, "https://api.brevo.com/v3/smtp/email");
+    assert.equal(brevoRequests[0].body.to[0].email, "brevo-customer@example.com");
+    assert.match(brevoRequests[0].body.htmlContent, /&lt;Amina&gt;/);
+    assert.match(brevoRequests[0].body.htmlContent, /A little something for you/);
+    assert.match(brevoRequests[0].body.htmlContent, /background:#fbf4ef/);
+
+    const sessionCookie = registerResponse.headers.get("set-cookie").split(";")[0];
+    const orderResponse = await fetch(`${notificationBaseUrl}/api/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: sessionCookie },
+      body: JSON.stringify({ items: [{ id: 2, quantity: 1 }] }),
+    });
+    assert.equal(orderResponse.status, 201);
+    const order = (await orderResponse.json()).order;
+    assert.equal(brevoRequests.length, 6);
+
+    const orderEmails = brevoRequests.slice(1, 3).map((request) => request.body);
+    assert.deepEqual(orderEmails.map((email) => email.to[0].email).sort(), [
+      "ayomideoluniyi49@gmail.com",
+      "brevo-customer@example.com",
+    ]);
+    assert.ok(orderEmails.every((email) => email.textContent.includes(order.id)));
+    assert.ok(orderEmails.every((email) => /pending admin confirmation/i.test(email.textContent)));
+    assert.ok(orderEmails.every((email) => /<img\b/i.test(email.htmlContent)));
+    assert.ok(orderEmails.every((email) => /width="84" height="84" alt="Dew Drop Face Cream product photo"/i.test(email.htmlContent)));
+    assert.ok(orderEmails.every((email) => email.htmlContent.includes("https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b")));
+    assert.ok(orderEmails.every((email) => email.htmlContent.includes("background:#29251f")));
+
+    const smsRequests = brevoRequests.slice(3);
+    assert.ok(smsRequests.every((request) => request.url === "https://api.brevo.com/v3/transactionalSMS/sms"));
+    assert.ok(smsRequests.every((request) => request.body.sender === "AMStore"));
+    assert.ok(smsRequests.every((request) => request.body.type === "transactional"));
+    assert.ok(smsRequests.every((request) => request.body.content.includes(order.id)));
+    assert.ok(smsRequests.every((request) => request.body.content.includes("pending")));
+    assert.deepEqual(smsRequests.map((request) => request.body.recipient).sort(), [
+      "+2348000000001",
+      "+2348000000002",
+      "+2348090000001",
+    ]);
+    assert.ok(smsRequests.every((request) => request.options.headers["api-key"] === "test-brevo-key"));
+
+    const adminSalt = randomBytes(16);
+    await fs.writeFile(path.join(notificationDataDir, "admin.json"), `${JSON.stringify({
+      email: "owner@example.com",
+      passwordSalt: adminSalt.toString("hex"),
+      passwordHash: scryptSync("test-admin-secret", adminSalt, 64).toString("hex"),
+    })}\n`);
+    const adminLogin = await fetch(`${notificationBaseUrl}/api/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "owner@example.com", password: "test-admin-secret" }),
+    });
+    assert.equal(adminLogin.status, 200);
+    const adminSessionCookie = adminLogin.headers.get("set-cookie").split(";")[0];
+    const statusResponse = await fetch(`${notificationBaseUrl}/api/admin/orders/${encodeURIComponent(order.id)}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: adminSessionCookie },
+      body: JSON.stringify({ action: "confirm_payment" }),
+    });
+    assert.equal(statusResponse.status, 200);
+    assert.equal(brevoRequests.length, 8);
+    const statusEmail = brevoRequests.find((request) => request.url.endsWith("/smtp/email") && request.body.subject.includes("Paid"));
+    assert.ok(statusEmail);
+    assert.equal(statusEmail.body.to[0].email, "brevo-customer@example.com");
+    assert.match(statusEmail.body.textContent, /confirmed your bank transfer/i);
+    assert.match(statusEmail.body.htmlContent, /An update on your order/);
+    assert.match(statusEmail.body.htmlContent, /Payment: Confirmed/);
+    const statusSms = brevoRequests.find((request) => request.url.endsWith("/transactionalSMS/sms") && /confirmed your bank transfer/i.test(request.body.content));
+    assert.ok(statusSms);
+    assert.equal(statusSms.body.recipient, "+2348090000001");
+  } finally {
+    await new Promise((resolve) => notificationServer.close(resolve));
+    await fs.rm(notificationDataDir, { recursive: true, force: true });
+  }
+});
+
+test("keeps private data files inaccessible and rejects foreign origins", async () => {
+  const localAdminResponse = await new Promise((resolve, reject) => {
+    const request = http.request({
+      hostname: "127.0.0.1",
+      port: server.address().port,
+      path: "/admin.html",
+      headers: { Host: `localhost:${server.address().port}` },
+    }, resolve);
+    request.once("error", reject);
+    request.end();
+  });
+  assert.equal(localAdminResponse.statusCode, 308);
+  assert.equal(localAdminResponse.headers.location, `${baseUrl}/admin.html`);
+
+  const checkoutPageResponse = await fetch(`${baseUrl}/checkout.html`);
+  assert.equal(checkoutPageResponse.status, 200);
+  const paymentPageResponse = await fetch(`${baseUrl}/payment.html`);
+  assert.equal(paymentPageResponse.status, 200);
+  const adminPageResponse = await fetch(`${baseUrl}/admin.html`);
+  assert.equal(adminPageResponse.status, 200);
+  const shortAdminPageResponse = await fetch(`${baseUrl}/admin`);
+  assert.equal(shortAdminPageResponse.status, 200);
+  assert.match(await shortAdminPageResponse.text(), /A&M Admin/);
+
+  const privateAdminResponse = await fetch(`${baseUrl}/data/admin.json`);
+  assert.equal(privateAdminResponse.status, 404);
+
+  const privateFileResponse = await fetch(`${baseUrl}/data/users.json`);
+  assert.equal(privateFileResponse.status, 404);
+  const privateSessionsResponse = await fetch(`${baseUrl}/data/sessions.json`);
+  assert.equal(privateSessionsResponse.status, 404);
+
+  const foreignOriginResponse = await fetch(`${baseUrl}/api/health`, {
+    headers: { Origin: "https://untrusted.example" },
+  });
+  assert.equal(foreignOriginResponse.status, 403);
+});
