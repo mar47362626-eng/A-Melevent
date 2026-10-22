@@ -1,4 +1,6 @@
-# A&M storefront backend
+# A-Melevent
+
+A&M storefront and Node.js backend.
 
 ## Run locally
 
