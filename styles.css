@@ -794,3 +794,68 @@ body.drawer-open { overflow: hidden; }
   .user-app-page .product-info { padding: 7px; }
   .user-app-sort select { max-width: 108px; }
 }
+
+.hub-app-page { min-height: 100vh; padding: 0; background: #f5f2ed; }
+.hub-app-login { width: min(calc(100% - 28px), 410px); margin: 24px auto; padding: clamp(20px, 5vw, 34px); border-radius: 16px; }
+.hub-app-login > .brand { margin-bottom: 24px; }
+.hub-app-login h1 { font-size: clamp(29px, 7vw, 40px); }
+.hub-app-login input { min-height: 42px; border-radius: 9px; }
+.hub-app-login form .button { min-height: 43px; border-radius: 9px; }
+.hub-app-shell { width: min(100%, 1120px); min-height: 100vh; margin: 0 auto; padding: 0 20px 48px; }
+.hub-app-header { position: sticky; top: 0; gap: 14px; margin: 0 -20px; padding: 11px 20px; border-bottom-color: #e8e2d9; background: rgb(245 242 237 / 96%); backdrop-filter: blur(14px); }
+.hub-app-header > .brand { font-size: 25px; }
+.hub-app-header-copy h1 { font-size: clamp(20px, 3vw, 27px); }
+.hub-app-header-copy .eyebrow { font-size: 8px; }
+.hub-app-header-actions { gap: 12px; }
+.hub-app-header-actions .admin-text-button { font-size: 10px; }
+.hub-app-search-panel, .hub-app-order-panel { margin-top: 14px; padding: clamp(14px, 2.5vw, 22px); border-radius: 13px; box-shadow: 0 4px 16px rgb(41 37 31 / 4%); }
+.hub-app-search-panel h2, .hub-app-order-panel .hub-order-heading h2 { margin: 5px 0; font-size: clamp(20px, 3vw, 25px); }
+.hub-app-search-panel > p { margin: 6px 0; font-size: 11px; line-height: 1.5; }
+.hub-app-search-panel .hub-search-form { margin-top: 13px; }
+.hub-app-search-panel .hub-search-form label { margin-bottom: 5px; font-size: 10px; }
+.hub-app-search-panel .hub-search-input-row { gap: 8px; }
+.hub-app-search-panel .hub-search-input-row input { min-height: 41px; border-radius: 9px; font-size: 12px; }
+.hub-app-search-panel .hub-search-input-row .button { min-height: 41px; padding: 0 14px; border-radius: 9px; font-size: 10px; }
+.hub-app-search-panel .hub-feedback { min-height: 0; margin-top: 5px; font-size: 10px; }
+.hub-app-order-panel { margin-top: 12px; }
+.hub-app-order-panel .hub-order-heading { padding-bottom: 11px; }
+.hub-app-order-panel .hub-status { padding: 6px 10px; font-size: 9px; }
+.hub-app-order-panel .hub-order-details { gap: 12px; padding: 14px 0; }
+.hub-app-order-panel .hub-order-details article { gap: 3px; }
+.hub-app-order-panel .hub-order-details article > span { margin-bottom: 0; font-size: 8px; }
+.hub-app-order-panel .hub-order-details strong { font-size: 11px; }
+.hub-app-order-panel .hub-order-details small { font-size: 9px; }
+.hub-app-order-panel .hub-items-section { padding: 14px 0; }
+.hub-app-items-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 9px; }
+.hub-app-items-heading h3 { margin: 0; font-size: 17px; }
+.hub-app-items-heading > span { color: var(--muted); font-size: 9px; }
+.hub-app-order-panel .hub-items-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 185px), 1fr)); gap: 10px; }
+.hub-app-order-panel .hub-items-list li { border-radius: 10px; }
+.hub-app-order-panel .hub-item-image-frame { min-height: 0; aspect-ratio: 1.15; }
+.hub-app-order-panel .hub-item-copy { gap: 5px; padding: 10px; font-size: 11px; }
+.hub-app-order-panel .hub-item-copy span { font-size: 10px; }
+.hub-app-order-panel .hub-next-step { gap: 12px; padding-top: 12px; }
+.hub-app-order-panel .hub-next-step p { font-size: 10px; }
+.hub-app-order-panel .hub-next-step .button { min-height: 40px; border-radius: 9px; font-size: 10px; }
+
+@media (max-width: 620px) {
+  .hub-app-shell { padding: 0 12px 30px; }
+  .hub-app-header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; margin: 0 -12px; padding: 9px 12px; }
+  .hub-app-header > .brand { grid-row: 1; font-size: 22px; }
+  .hub-app-header-copy { grid-row: 1; min-width: 0; }
+  .hub-app-header-copy h1 { font-size: 19px; }
+  .hub-app-header-actions { grid-column: 1 / -1; width: 100%; justify-content: flex-end; gap: 14px; }
+  .hub-app-header-actions .admin-text-button { font-size: 9px; }
+  .hub-app-search-panel, .hub-app-order-panel { margin-top: 10px; padding: 13px; border-radius: 11px; }
+  .hub-app-search-panel h2, .hub-app-order-panel .hub-order-heading h2 { font-size: 20px; }
+  .hub-app-search-panel > p { font-size: 10px; }
+  .hub-app-search-panel .hub-search-form { margin-top: 11px; }
+  .hub-app-search-panel .hub-search-input-row { align-items: stretch; flex-direction: row; }
+  .hub-app-search-panel .hub-search-input-row input { min-height: 39px; }
+  .hub-app-search-panel .hub-search-input-row .button { width: auto; min-height: 39px; padding: 0 11px; }
+  .hub-app-order-panel .hub-order-details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 9px; }
+  .hub-app-order-panel .hub-items-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .hub-app-order-panel .hub-item-image-frame { aspect-ratio: .95; }
+  .hub-app-order-panel .hub-next-step { align-items: stretch; flex-direction: column; }
+  .hub-app-order-panel .hub-next-step .button { width: 100%; }
+}

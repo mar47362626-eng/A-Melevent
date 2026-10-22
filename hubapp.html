@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f2ed" />
+    <meta name="description" content="A&M order-picking and fulfillment app for hub staff." />
+    <title>A&amp;M Hub App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="hub.js" defer></script>
+  </head>
+  <body class="admin-page hub-page hub-app-page">
+    <main class="admin-login hub-app-login" id="hub-login">
+      <a class="brand" href="index.html" aria-label="A&M home">A<span>&amp;</span>M<span class="brand-dot">.</span></a>
+      <span class="eyebrow">A&amp;M HUB APP</span>
+      <h1>Ready for the <em>next order?</em></h1>
+      <p>Sign in to find orders, check product photos, and safely move confirmed orders through fulfillment.</p>
+      <form id="hub-login-form">
+        <label>Hub email<input name="email" type="email" autocomplete="username" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="button button-dark" type="submit">Sign in to the hub <span aria-hidden="true">↗</span></button>
+        <p class="admin-feedback" id="hub-login-feedback" role="status" aria-live="polite"></p>
+      </form>
+      <button class="hub-auth-switch" id="hub-show-register" type="button">New hub staff? Create an account</button>
+      <form id="hub-register-form" hidden>
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="new-password" minlength="10" required /><small>Use at least 10 characters.</small></label>
+        <label>Hub invitation code<input name="inviteCode" type="password" autocomplete="off" required /></label>
+        <button class="button button-dark" type="submit">Register and send verification code</button>
+        <p class="admin-feedback" id="hub-register-feedback" role="status" aria-live="polite"></p>
+      </form>
+      <form id="hub-verify-form" hidden>
+        <p class="hub-verify-copy">Enter the six-digit verification code sent to your email. Codes expire after 15 minutes.</p>
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Verification code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required /></label>
+        <label>Hub invitation code<input name="inviteCode" type="password" autocomplete="off" required /></label>
+        <button class="button button-dark" type="submit">Verify email</button>
+        <button class="hub-auth-switch" id="hub-resend-code" type="button">Send a new verification code</button>
+        <p class="admin-feedback" id="hub-verify-feedback" role="status" aria-live="polite"></p>
+      </form>
+      <button class="hub-auth-switch" id="hub-show-login" type="button" hidden>Already registered? Sign in</button>
+      <a class="admin-store-link" href="index.html">← Return to the storefront</a>
+    </main>
+
+    <main class="hub-shell hub-app-shell" id="hub-shell" hidden>
+      <header class="hub-header hub-app-header">
+        <a class="brand" href="index.html" aria-label="A&M home">A<span>&amp;</span>M<span class="brand-dot">.</span></a>
+        <div class="hub-header-copy">
+          <span class="eyebrow">STAFF WORKSPACE</span>
+          <h1>Order <em>fulfillment.</em></h1>
+        </div>
+        <div class="hub-header-actions">
+          <button type="button" class="admin-text-button" id="hub-fullscreen" aria-pressed="false">Fullscreen</button>
+          <button type="button" class="admin-text-button" id="hub-logout">Sign out</button>
+        </div>
+      </header>
+
+      <section class="hub-search-panel hub-app-search-panel">
+        <span class="eyebrow">PICK AN ORDER</span>
+        <h2>Start with the order number.</h2>
+        <p>Check the payment status, then match each item to its photo before moving the order along.</p>
+        <form class="hub-search-form" id="hub-search-form">
+          <label for="hub-order-number">Order number</label>
+          <div class="hub-search-input-row">
+            <input id="hub-order-number" name="orderNumber" type="search" autocomplete="off" placeholder="e.g. AM-123456" required />
+            <button class="button button-dark" type="submit">Find order <span aria-hidden="true">↗</span></button>
+          </div>
+        </form>
+        <p class="hub-feedback" id="hub-feedback" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="hub-order-panel hub-app-order-panel" id="hub-order-panel" aria-live="polite" hidden>
+        <div class="hub-order-heading">
+          <div><span class="eyebrow">ORDER DETAILS</span><h2 id="hub-order-id"></h2></div>
+          <span class="hub-status" id="hub-order-status"></span>
+        </div>
+        <div class="hub-order-details">
+          <article><span>Customer</span><strong id="hub-customer-name"></strong><small id="hub-customer-email"></small><small id="hub-customer-phone"></small></article>
+          <article><span>Delivery address</span><strong id="hub-delivery-street"></strong><small id="hub-delivery-city"></small></article>
+          <article><span>Payment</span><strong id="hub-payment-status"></strong><small id="hub-payment-method"></small></article>
+        </div>
+        <div class="hub-items-section">
+          <div class="hub-app-items-heading"><h3>Items to pick</h3><span>Match the photo and quantity</span></div>
+          <ul class="hub-items-list" id="hub-items-list"></ul>
+        </div>
+        <div class="hub-next-step">
+          <p id="hub-next-step-copy"></p>
+          <button class="button button-dark" id="hub-next-step-button" type="button" hidden></button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
