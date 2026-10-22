@@ -737,6 +737,7 @@ function createServer({
           throw error;
         }
         order.status = transition.to;
+        if (action === "picked") order.hubPickedAt = new Date().toISOString();
       }
       order.updatedAt = new Date().toISOString();
       updatedOrder = { ...order };
@@ -1065,6 +1066,20 @@ function createServer({
       }
       response.setHeader("Set-Cookie", `am_hub_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${production ? "; Secure" : ""}`);
       json(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/hub/orders") {
+      if (!await hubForSession(request)) {
+        json(response, 401, { error: "Please sign in to the fulfillment hub." });
+        return;
+      }
+      const orders = await store.read("orders.json");
+      const pickedOrders = orders
+        .filter((order) => order.hubPickedAt || order.status === "Picked")
+        .sort((left, right) => new Date(right.hubPickedAt || right.updatedAt || right.date)
+          - new Date(left.hubPickedAt || left.updatedAt || left.date));
+      json(response, 200, { orders: pickedOrders });
       return;
     }
 

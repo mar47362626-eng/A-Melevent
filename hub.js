@@ -12,6 +12,9 @@ const feedback = document.querySelector("#hub-feedback");
 const orderPanel = document.querySelector("#hub-order-panel");
 const searchForm = document.querySelector("#hub-search-form");
 const orderNumberInput = document.querySelector("#hub-order-number");
+const pickedList = document.querySelector("#hub-picked-list");
+const pickedCount = document.querySelector("#hub-picked-count");
+const pickedFeedback = document.querySelector("#hub-picked-feedback");
 let activeOrder = null;
 
 async function requestApi(path, options = {}) {
@@ -140,6 +143,73 @@ function showOrder(order) {
   }
 }
 
+function renderPickedOrders(orders) {
+  pickedList.replaceChildren();
+  pickedCount.textContent = String(orders.length);
+  if (!orders.length) {
+    const empty = document.createElement("li");
+    empty.className = "hub-picked-empty";
+    empty.textContent = "No orders have been marked picked yet.";
+    pickedList.append(empty);
+    return;
+  }
+
+  for (const order of orders) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.className = "hub-picked-order";
+    button.type = "button";
+    button.dataset.orderId = order.id;
+
+    const heading = document.createElement("span");
+    heading.className = "hub-picked-order-heading";
+    const orderId = document.createElement("strong");
+    orderId.textContent = order.id;
+    const status = document.createElement("span");
+    status.className = "hub-picked-status";
+    status.textContent = order.status;
+    heading.append(orderId, status);
+
+    const customer = document.createElement("span");
+    customer.className = "hub-picked-customer";
+    customer.textContent = order.customer?.name || "Customer";
+
+    const summary = document.createElement("span");
+    summary.className = "hub-picked-summary";
+    summary.textContent = (Array.isArray(order.items) ? order.items : [])
+      .map((product) => `${product.name || "Product"} × ${product.quantity}`)
+      .join(" · ") || "No item details";
+
+    const date = document.createElement("time");
+    date.className = "hub-picked-date";
+    const pickedAt = order.hubPickedAt || order.updatedAt || order.date;
+    if (pickedAt && Number.isFinite(new Date(pickedAt).getTime())) {
+      date.dateTime = new Date(pickedAt).toISOString();
+      date.textContent = new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(pickedAt));
+    } else {
+      date.textContent = "Date unavailable";
+    }
+
+    button.append(heading, customer, summary, date);
+    item.append(button);
+    pickedList.append(item);
+  }
+}
+
+async function refreshPickedOrders() {
+  const result = await requestApi("/api/hub/orders");
+  renderPickedOrders(result.orders);
+  pickedFeedback.textContent = "";
+}
+
+async function loadOrder(orderId) {
+  const result = await requestApi(`/api/hub/orders/${encodeURIComponent(orderId)}`);
+  showOrder(result.order);
+}
+
 document.querySelector("#hub-show-register").addEventListener("click", () => {
   loginFeedback.textContent = "";
   registerFeedback.textContent = "";
@@ -246,6 +316,9 @@ loginForm.addEventListener("submit", async (event) => {
     });
     form.reset();
     setHubSignedIn(true);
+    refreshPickedOrders().catch((error) => {
+      pickedFeedback.textContent = `Could not load picked orders: ${error.message}`;
+    });
     orderNumberInput.focus();
   } catch (error) {
     loginFeedback.textContent = error.message;
@@ -263,14 +336,40 @@ searchForm.addEventListener("submit", async (event) => {
   feedback.textContent = "Looking up order…";
   orderPanel.hidden = true;
   try {
-    const result = await requestApi(`/api/hub/orders/${encodeURIComponent(orderNumber)}`);
-    showOrder(result.order);
+    await loadOrder(orderNumber);
     feedback.textContent = "";
   } catch (error) {
     activeOrder = null;
     feedback.textContent = error.message;
   } finally {
     button.disabled = false;
+  }
+});
+
+document.querySelector("#hub-picked-refresh").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  pickedFeedback.textContent = "Refreshing picked orders…";
+  try {
+    await refreshPickedOrders();
+  } catch (error) {
+    pickedFeedback.textContent = `Could not refresh picked orders: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+pickedList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-order-id]");
+  if (!button) return;
+  pickedFeedback.textContent = `Loading order ${button.dataset.orderId}…`;
+  try {
+    await loadOrder(button.dataset.orderId);
+    feedback.textContent = "";
+    pickedFeedback.textContent = "";
+    orderPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    pickedFeedback.textContent = `Could not open this order: ${error.message}`;
   }
 });
 
@@ -286,6 +385,9 @@ document.querySelector("#hub-next-step-button").addEventListener("click", async 
     });
     showOrder(result.order);
     feedback.textContent = "Order updated. Email notifications were attempted for the customer and store admin.";
+    refreshPickedOrders().catch((error) => {
+      pickedFeedback.textContent = `Order was updated, but picked orders could not refresh: ${error.message}`;
+    });
   } catch (error) {
     feedback.textContent = error.message;
     button.disabled = false;
@@ -300,6 +402,9 @@ document.querySelector("#hub-logout").addEventListener("click", async (event) =>
     activeOrder = null;
     orderPanel.hidden = true;
     feedback.textContent = "";
+    pickedList.replaceChildren();
+    pickedCount.textContent = "0";
+    pickedFeedback.textContent = "";
     setHubSignedIn(false);
   } catch (error) {
     feedback.textContent = error.message;
@@ -335,7 +440,13 @@ document.addEventListener("fullscreenchange", updateFullscreenButton);
 requestApi("/api/hub/session")
   .then(({ authenticated }) => {
     setHubSignedIn(authenticated);
-    if (!authenticated) setAuthMode("login");
+    if (!authenticated) {
+      setAuthMode("login");
+      return;
+    }
+    refreshPickedOrders().catch((error) => {
+      pickedFeedback.textContent = `Could not load picked orders: ${error.message}`;
+    });
   })
   .catch((error) => {
     setHubSignedIn(false);

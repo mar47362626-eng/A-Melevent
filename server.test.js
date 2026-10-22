@@ -349,6 +349,8 @@ test("protects admin dashboard and supports verified order fulfillment actions",
     headers: { Cookie: adminCookie },
   });
   assert.equal(dashboardResponse.status, 200);
+  const unauthorizedHubOrders = await fetch(`${baseUrl}/api/hub/orders`);
+  assert.equal(unauthorizedHubOrders.status, 401);
   const unauthorizedHubOrder = await fetch(`${baseUrl}/api/hub/orders/${encodeURIComponent(testOrderId)}`);
   assert.equal(unauthorizedHubOrder.status, 401);
   const adminCookieHubAccess = await fetch(`${baseUrl}/api/hub/orders/${encodeURIComponent(testOrderId)}`, {
@@ -473,12 +475,27 @@ test("protects admin dashboard and supports verified order fulfillment actions",
   const picked = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "picked" });
   assert.equal(picked.status, 200);
   assert.equal((await picked.json()).order.status, "Picked");
+  const pickedOrdersResponse = await fetch(`${baseUrl}/api/hub/orders`, {
+    headers: { Cookie: hubCookie },
+  });
+  assert.equal(pickedOrdersResponse.status, 200);
+  const pickedOrders = await pickedOrdersResponse.json();
+  assert.deepEqual(pickedOrders.orders.map((order) => order.id), [testOrderId]);
+  assert.ok(pickedOrders.orders[0].hubPickedAt);
+  const savedPickedOrders = JSON.parse(await fs.readFile(path.join(dataDir, "orders.json"), "utf8"));
+  assert.ok(savedPickedOrders.find((order) => order.id === testOrderId).hubPickedAt);
   const invalidHubAction = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "confirm_payment" });
   assert.equal(invalidHubAction.status, 400);
 
   const shipped = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "shipped" });
   assert.equal(shipped.status, 200);
   assert.equal((await shipped.json()).order.status, "Shipped");
+  const pickedOrdersAfterShipping = await fetch(`${baseUrl}/api/hub/orders`, {
+    headers: { Cookie: hubCookie },
+  });
+  const pickedHistoryAfterShipping = await pickedOrdersAfterShipping.json();
+  assert.deepEqual(pickedHistoryAfterShipping.orders.map((order) => order.id), [testOrderId]);
+  assert.equal(pickedHistoryAfterShipping.orders[0].status, "Shipped");
 
   const inTransit = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "in_transit" });
   assert.equal(inTransit.status, 200);
@@ -782,6 +799,7 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   const hubAppPage = await hubAppResponse.text();
   assert.match(hubAppPage, /A&amp;M Hub App/);
   assert.match(hubAppPage, /id="hub-items-list"/);
+  assert.match(hubAppPage, /id="hub-picked-list"/);
   assert.match(hubAppPage, /Match the photo and quantity/);
   const shortHubAppResponse = await fetch(`${baseUrl}/hubapp`);
   assert.equal(shortHubAppResponse.status, 200);
@@ -966,14 +984,17 @@ test("registers and reloads a customer profile through Supabase", async () => {
 });
 
 test("maps Supabase orders and item snapshots to the storefront order shape", async () => {
+  const updates = [];
   const store = new SupabaseStore({
     url: "https://project.example",
     anonKey: "test-anon-key",
     serviceRoleKey: "test-service-role-key",
-    fetchImpl: async () => ({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify([{
+    fetchImpl: async (_url, options) => {
+      if (options.method === "PATCH") updates.push(JSON.parse(options.body));
+      return {
+        ok: true,
+        status: 200,
+        text: async () => options.method === "GET" ? JSON.stringify([{
         id: "AM-12345678",
         customer_id: "customer-uuid",
         status: "Pending",
@@ -993,6 +1014,7 @@ test("maps Supabase orders and item snapshots to the storefront order shape", as
         total: "71000.00",
         created_at: "2026-10-22T09:00:00.000Z",
         updated_at: "2026-10-22T09:00:00.000Z",
+        hub_picked_at: null,
         order_items: [{
           product_id: 1,
           product_name: "The Everyday Curl",
@@ -1000,8 +1022,9 @@ test("maps Supabase orders and item snapshots to the storefront order shape", as
           quantity: 1,
           unit_price: "68000.00",
         }],
-      }]),
-    }),
+        }]) : "",
+      };
+    },
   });
 
   const [order] = await store.read("orders.json");
@@ -1010,6 +1033,12 @@ test("maps Supabase orders and item snapshots to the storefront order shape", as
   assert.equal(order.items[0].name, "The Everyday Curl");
   assert.equal(order.items[0].price, 68000);
   assert.equal(order.total, 71000);
+  assert.equal(order.hubPickedAt, null);
+  const pickedAt = "2026-10-22T10:00:00.000Z";
+  await store.update("orders.json", (orders) => {
+    orders[0].hubPickedAt = pickedAt;
+  });
+  assert.equal(updates[0].hub_picked_at, pickedAt);
 });
 
 test("persists server-created orders and customer sessions to Supabase", async () => {

@@ -444,6 +444,7 @@ function orderToRow(order) {
     delivery_state: order.deliveryAddress.state,
     total: order.total,
     payment_confirmed_at: order.paymentConfirmedAt || null,
+    hub_picked_at: order.hubPickedAt || null,
     created_at: order.date,
     updated_at: order.updatedAt || order.date,
   };
@@ -458,6 +459,7 @@ function orderFromRow(row) {
     status: row.status,
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
+    hubPickedAt: row.hub_picked_at || null,
     subtotal: Number(row.subtotal),
     deliveryFee: Number(row.delivery_fee),
     deliveryEstimate: row.delivery_estimate,

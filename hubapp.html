@@ -46,31 +46,33 @@
     </main>
 
     <main class="hub-shell hub-app-shell" id="hub-shell" hidden>
-      <header class="hub-header hub-app-header">
-        <a class="brand" href="index.html" aria-label="A&M home">A<span>&amp;</span>M<span class="brand-dot">.</span></a>
-        <div class="hub-header-copy">
-          <span class="eyebrow">STAFF WORKSPACE</span>
-          <h1>Order <em>fulfillment.</em></h1>
-        </div>
-        <div class="hub-header-actions">
-          <button type="button" class="admin-text-button" id="hub-fullscreen" aria-pressed="false">Fullscreen</button>
-          <button type="button" class="admin-text-button" id="hub-logout">Sign out</button>
-        </div>
-      </header>
-
-      <section class="hub-search-panel hub-app-search-panel">
-        <span class="eyebrow">PICK AN ORDER</span>
-        <h2>Start with the order number.</h2>
-        <p>Check the payment status, then match each item to its photo before moving the order along.</p>
-        <form class="hub-search-form" id="hub-search-form">
-          <label for="hub-order-number">Order number</label>
-          <div class="hub-search-input-row">
-            <input id="hub-order-number" name="orderNumber" type="search" autocomplete="off" placeholder="e.g. AM-123456" required />
-            <button class="button button-dark" type="submit">Find order <span aria-hidden="true">↗</span></button>
+      <div class="hub-app-sticky-tools">
+        <header class="hub-header hub-app-header">
+          <a class="brand" href="index.html" aria-label="A&M home">A<span>&amp;</span>M<span class="brand-dot">.</span></a>
+          <div class="hub-header-copy">
+            <span class="eyebrow">STAFF WORKSPACE</span>
+            <h1>Order <em>fulfillment.</em></h1>
           </div>
-        </form>
-        <p class="hub-feedback" id="hub-feedback" role="status" aria-live="polite"></p>
-      </section>
+          <div class="hub-header-actions">
+            <button type="button" class="admin-text-button" id="hub-fullscreen" aria-pressed="false">Fullscreen</button>
+            <button type="button" class="admin-text-button" id="hub-logout">Sign out</button>
+          </div>
+        </header>
+
+        <section class="hub-search-panel hub-app-search-panel">
+          <span class="eyebrow">PICK AN ORDER</span>
+          <h2>Start with the order number.</h2>
+          <p>Check the payment status, then match each item to its photo before moving the order along.</p>
+          <form class="hub-search-form" id="hub-search-form">
+            <label for="hub-order-number">Order number</label>
+            <div class="hub-search-input-row">
+              <input id="hub-order-number" name="orderNumber" type="search" autocomplete="off" placeholder="e.g. AM-123456" required />
+              <button class="button button-dark" type="submit">Find order <span aria-hidden="true">↗</span></button>
+            </div>
+          </form>
+          <p class="hub-feedback" id="hub-feedback" role="status" aria-live="polite"></p>
+        </section>
+      </div>
 
       <section class="hub-order-panel hub-app-order-panel" id="hub-order-panel" aria-live="polite" hidden>
         <div class="hub-order-heading">
@@ -90,6 +92,19 @@
           <p id="hub-next-step-copy"></p>
           <button class="button button-dark" id="hub-next-step-button" type="button" hidden></button>
         </div>
+      </section>
+
+      <section class="hub-picked-panel" aria-labelledby="hub-picked-title">
+        <div class="hub-picked-heading">
+          <div>
+            <span class="eyebrow">SAVED BY THE HUB</span>
+            <h2 id="hub-picked-title">Picked orders <span class="hub-picked-count" id="hub-picked-count">0</span></h2>
+            <p>All orders marked picked stay here, including parcels already dispatched.</p>
+          </div>
+          <button class="hub-picked-refresh" id="hub-picked-refresh" type="button">Refresh list</button>
+        </div>
+        <p class="hub-picked-feedback" id="hub-picked-feedback" role="status" aria-live="polite"></p>
+        <ul class="hub-picked-list" id="hub-picked-list"></ul>
       </section>
     </main>
   </body>
