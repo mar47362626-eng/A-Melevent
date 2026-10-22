@@ -24,7 +24,11 @@ async function requestApi(path, options = {}) {
     },
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || `Request failed (${response.status}).`);
+  if (!response.ok) {
+    const error = new Error(result.error || `Request failed (${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
   return result;
 }
 
@@ -276,5 +280,7 @@ requestApi("/api/hub/session")
   })
   .catch((error) => {
     setHubSignedIn(false);
-    loginFeedback.textContent = error.message;
+    loginFeedback.textContent = error.status === 404
+      ? "The hub API is not available at this address. Open https://a-melevent.onrender.com/hub.html, or run the backend and use http://127.0.0.1:3000/hub.html. VS Code Live Server cannot run the hub API."
+      : error.message;
   });

@@ -506,7 +506,6 @@ body.drawer-open { overflow: hidden; }
 .hub-header-copy .eyebrow { color: var(--accent); }
 .hub-header-copy h1 { margin: 3px 0 0; font-size: clamp(26px, 4vw, 36px); }
 .hub-header-actions { display: flex; align-items: center; gap: 18px; }
-.hub-admin-link { color: var(--ink); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .hub-search-panel, .hub-order-panel { margin-top: 26px; padding: clamp(20px, 4vw, 34px); border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .hub-search-panel > .eyebrow, .hub-order-heading .eyebrow { color: var(--accent); }
 .hub-search-panel h2, .hub-order-heading h2 { margin: 8px 0; font-family: "Playfair Display", Georgia, serif; font-size: clamp(22px, 3vw, 29px); }

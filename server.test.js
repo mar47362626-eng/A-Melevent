@@ -758,7 +758,9 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   assert.equal(adminPageResponse.status, 200);
   const hubPageResponse = await fetch(`${baseUrl}/hub.html`);
   assert.equal(hubPageResponse.status, 200);
-  assert.match(await hubPageResponse.text(), /A&M Fulfillment Hub/);
+  const hubPage = await hubPageResponse.text();
+  assert.match(hubPage, /A&M Fulfillment Hub/);
+  assert.doesNotMatch(hubPage, /Admin workspace/);
   const shortHubPageResponse = await fetch(`${baseUrl}/hub`);
   assert.equal(shortHubPageResponse.status, 200);
   const shortAdminPageResponse = await fetch(`${baseUrl}/admin`);
