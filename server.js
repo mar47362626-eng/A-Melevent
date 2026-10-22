@@ -6,6 +6,7 @@ const { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } = require
 const { promisify } = require("node:util");
 const fs = require("node:fs/promises");
 const fsSync = require("node:fs");
+const { SupabaseStore } = require("./supabase-store");
 
 const scryptAsync = promisify(scrypt);
 const ROOT = __dirname;
@@ -344,11 +345,30 @@ function createServer({
   brevoSmsSender = process.env.BREVO_SMS_SENDER || "AMStore",
   adminSmsNumbers = process.env.BREVO_ADMIN_SMS_NUMBERS || "",
   publicSiteUrl = process.env.PUBLIC_SITE_URL || "",
+  supabaseUrl = process.env.SUPABASE_URL || "",
+  supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "",
+  supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   fetchImpl = globalThis.fetch,
 } = {}) {
-  const store = createStore(dataDir);
+  const hasSupabaseSetting = Boolean(supabaseUrl || supabaseAnonKey || supabaseServiceRoleKey);
+  if (hasSupabaseSetting && !(supabaseUrl && supabaseAnonKey && supabaseServiceRoleKey)) {
+    throw new Error("Supabase requires SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY together.");
+  }
+  const supabaseStore = hasSupabaseSetting
+    ? new SupabaseStore({
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+      serviceRoleKey: supabaseServiceRoleKey,
+      fetchImpl,
+    })
+    : null;
+  const store = supabaseStore || createStore(dataDir);
   const attempts = new Map();
   let pendingProductWrite = Promise.resolve();
+
+  async function getProducts() {
+    return supabaseStore ? supabaseStore.readProducts() : loadProducts(productsFile);
+  }
 
   async function sendBrevoRequest(endpoint, payload) {
     const response = await fetchImpl(`https://api.brevo.com/v3/${endpoint}`, {
@@ -578,8 +598,9 @@ function createServer({
   }
 
   function updateProducts(callback) {
+    if (supabaseStore) return supabaseStore.updateProducts(callback);
     const update = pendingProductWrite.catch(() => {}).then(async () => {
-      const products = await loadProducts(productsFile);
+      const products = await getProducts();
       const result = await callback(products);
       const temporaryPath = `${productsFile}.${randomUUID()}.tmp`;
       try {
@@ -668,7 +689,7 @@ function createServer({
       orderCount: orders.filter((order) => order.customerId === user.id).length,
     })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     messages: [...messages].sort((a, b) => new Date(b.date) - new Date(a.date)),
-    products: await loadProducts(productsFile),
+    products: await getProducts(),
     summary: {
       orders: orders.length,
       customers: users.length,
@@ -786,10 +807,16 @@ function createServer({
         return;
       }
       const filename = `${randomUUID()}.${extension}`;
-      const imageDirectory = path.join(dataDir, "product-images");
-      await fs.mkdir(imageDirectory, { recursive: true });
-      await fs.writeFile(path.join(imageDirectory, filename), image, { flag: "wx", mode: 0o600 });
-      json(response, 201, { image: `/api/product-images/${filename}` });
+      let imagePath;
+      if (supabaseStore) {
+        imagePath = await supabaseStore.uploadProductImage(filename, image, productImageContentType(extension));
+      } else {
+        const imageDirectory = path.join(dataDir, "product-images");
+        await fs.mkdir(imageDirectory, { recursive: true });
+        await fs.writeFile(path.join(imageDirectory, filename), image, { flag: "wx", mode: 0o600 });
+        imagePath = `/api/product-images/${filename}`;
+      }
+      json(response, 201, { image: imagePath });
       return;
     }
 
@@ -989,7 +1016,7 @@ function createServer({
     }
 
     if (request.method === "GET" && url.pathname === "/api/products") {
-      const products = await loadProducts(productsFile);
+      const products = await getProducts();
       json(response, 200, { products });
       return;
     }
@@ -1012,32 +1039,72 @@ function createServer({
         json(response, 400, { error: "Please provide your name, valid email, phone number, delivery street address, city, state, and a password between 8 and 128 characters." });
         return;
       }
-      const salt = randomBytes(16);
-      const passwordHash = await scryptAsync(password, salt, 64);
-      const customer = {
+      const welcomeNotification = {
         id: randomUUID(),
-        firstName,
-        lastName,
-        email,
-        phone,
-        address,
-        city,
-        region,
-        passwordSalt: salt.toString("hex"),
-        passwordHash: passwordHash.toString("hex"),
-        createdAt: new Date().toISOString(),
-        orders: [],
-        inbox: [{ id: randomUUID(), subject: "Welcome to A&M", message: "Your A&M account is ready. We’re happy you’re here.", date: new Date().toISOString() }],
+        subject: "Welcome to A&M",
+        message: "Your A&M account is ready. We’re happy you’re here.",
+        date: new Date().toISOString(),
       };
+      let customer;
       try {
-        await store.update("users.json", (users) => {
-          if (users.some((user) => user.email === email)) {
-            const error = new Error("An account with this email already exists. Please log in instead.");
-            error.status = 409;
+        if (supabaseStore) {
+          let authUser;
+          try {
+            authUser = await supabaseStore.createAuthUser({ email, password, firstName, lastName });
+          } catch (error) {
+            if (error.status === 422 && /already|registered|exists|duplicate/i.test(error.message)) {
+              error.status = 409;
+              error.message = "An account with this email already exists. Please log in instead.";
+            }
             throw error;
           }
-          users.push(customer);
-        });
+          customer = {
+            id: authUser.id,
+            firstName,
+            lastName,
+            email,
+            phone,
+            address,
+            city,
+            region,
+            createdAt: new Date().toISOString(),
+            orders: [],
+            inbox: [welcomeNotification],
+          };
+          try {
+            await supabaseStore.upsertCustomerProfile(customer);
+            await supabaseStore.createCustomerNotification(customer.id, welcomeNotification);
+          } catch (error) {
+            await supabaseStore.deleteAuthUser(customer.id).catch(() => {});
+            throw error;
+          }
+        } else {
+          const salt = randomBytes(16);
+          const passwordHash = await scryptAsync(password, salt, 64);
+          customer = {
+            id: randomUUID(),
+            firstName,
+            lastName,
+            email,
+            phone,
+            address,
+            city,
+            region,
+            passwordSalt: salt.toString("hex"),
+            passwordHash: passwordHash.toString("hex"),
+            createdAt: new Date().toISOString(),
+            orders: [],
+            inbox: [welcomeNotification],
+          };
+          await store.update("users.json", (users) => {
+            if (users.some((user) => user.email === email)) {
+              const error = new Error("An account with this email already exists. Please log in instead.");
+              error.status = 409;
+              throw error;
+            }
+            users.push(customer);
+          });
+        }
       } catch (error) {
         if (error.status) throw error;
         console.error("Could not save a registered customer:", error);
@@ -1058,6 +1125,31 @@ function createServer({
       const body = await readJsonBody(request);
       const email = normalizeText(body.email, 254).toLowerCase();
       const password = typeof body.password === "string" ? body.password : "";
+      if (supabaseStore) {
+        if (!email || password.length > 128) {
+          json(response, 401, { error: "Email or password is incorrect." });
+          return;
+        }
+        let authResult;
+        try {
+          authResult = await supabaseStore.signIn(email, password);
+        } catch (error) {
+          if (error.status === 400 || error.status === 401) {
+            json(response, 401, { error: "Email or password is incorrect." });
+            return;
+          }
+          throw error;
+        }
+        const customer = authResult.user?.id ? await supabaseStore.getCustomerProfile(authResult.user.id) : null;
+        if (!customer) {
+          console.error("Supabase Auth returned a user without a customer profile.");
+          json(response, 503, { error: "Your account profile is not ready. Please contact the store for help." });
+          return;
+        }
+        await createSession(response, { role: "customer", customerId: customer.id });
+        json(response, 200, { customer: cleanCustomer(await customerWithCurrentOrders(customer)) });
+        return;
+      }
       const users = await store.read("users.json");
       const customer = users.find((user) => user.email === email);
       if (!customer || password.length > 128) {
@@ -1168,7 +1260,7 @@ function createServer({
         json(response, 400, { error: "Your bag must contain valid products." });
         return;
       }
-      const products = await loadProducts(productsFile);
+      const products = await getProducts();
       const productsById = new Map(products.map((product) => [product.id, product]));
       if (body.items.length > products.length) {
         json(response, 400, { error: "Your bag contains too many different products." });

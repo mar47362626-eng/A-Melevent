@@ -85,6 +85,15 @@ create table if not exists public.customer_notifications (
   read_at timestamptz
 );
 
+create table if not exists public.app_sessions (
+  token_hash text primary key check (token_hash ~ '^[a-f0-9]{64}$'),
+  role text not null check (role in ('customer', 'admin')),
+  customer_id uuid references public.customer_profiles (id) on delete cascade,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  check ((role = 'customer' and customer_id is not null) or (role = 'admin' and customer_id is null))
+);
+
 create table if not exists public.contact_messages (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(btrim(name)) between 1 and 120),
@@ -111,6 +120,26 @@ create index if not exists customer_notifications_customer_created_idx
   on public.customer_notifications (customer_id, created_at desc);
 create index if not exists contact_messages_created_idx
   on public.contact_messages (created_at desc);
+create index if not exists app_sessions_expires_idx
+  on public.app_sessions (expires_at);
+
+insert into public.products (id, name, category, detail, description, price, tag, image)
+values
+  (1, 'The Everyday Curl', 'Wigs', 'Soft curls · 18 inch', 'A soft, curly look that brings a little extra personality to everyday outfits and dressed-up plans. Its 18-inch length gives you a defined, face-framing style.', 68000, 'Best loved', 'photo-1534528741775-53994a69daeb'),
+  (2, 'Dew Drop Face Cream', 'Beauty', 'Daily moisture · 50 ml', 'A simple daily moisturiser for adding a comfortable, hydrated feel to your skincare routine. The 50 ml size fits neatly on your shelf or in your travel bag. Check the product packaging for the full ingredient list and directions.', 14500, 'A little glow', 'photo-1608248543803-ba4f8c70ae0b'),
+  (3, 'Sunday Kind of Love', 'Fragrance', 'Eau de parfum · 50 ml', 'A 50 ml eau de parfum made for those days when you want your fragrance to feel like part of the outfit. A lovely pick for your own collection or a thoughtful gift.', 32000, 'New in', 'photo-1541643600914-78b084683601'),
+  (4, 'The Main Character', 'Shoes', 'Sculpted heel · caramel', 'A caramel-toned sculpted heel that makes an outfit feel considered, whether you are dressing for an occasion or adding a statement to a simple look.', 42500, 'A&M favourite', 'photo-1543163521-1bf539c55dd2'),
+  (5, 'Soft Life Straight', 'Wigs', 'Silky straight · 20 inch', 'A sleek, straight style with a 20-inch length for a polished look. Wear it as your everyday finish or style it up for plans after hours.', 75000, 'Feel yourself', 'photo-1524504388940-b1c1722653e1'),
+  (6, 'Sunday Skin Body Butter', 'Beauty', 'Whipped & wonderful · 200 ml', 'A 200 ml body butter for adding a little feel-good care to your daily routine. Its whipped texture makes it a lovely treat after a shower or whenever your skin needs a little extra comfort. Check the packaging for ingredients and directions.', 18500, 'Self-care pick', 'photo-1601049541289-9b1b7bbbfe19'),
+  (7, 'Soft Spoken', 'Fragrance', 'Warm amber · 30 ml', 'A 30 ml warm-amber fragrance that is easy to bring along for a day out or keep close for evening plans. A smaller size for trying a new scent or gifting someone special.', 24500, 'Your new scent', 'photo-1594035910387-fea47794261f'),
+  (8, 'The One More Look', 'Shoes', 'Everyday sandal · cocoa', 'A cocoa-toned everyday sandal that pairs easily with your casual favourites. A simple go-to for days when you want a comfortable-looking, put-together finish.', 38000, 'Easy does it', 'photo-1560343090-f0409e92791a')
+on conflict (id) do nothing;
+
+select setval(
+  pg_get_serial_sequence('public.products', 'id'),
+  greatest(coalesce((select max(id) from public.products), 1), 1),
+  exists (select 1 from public.products)
+);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -168,6 +197,7 @@ alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.customer_notifications enable row level security;
+alter table public.app_sessions enable row level security;
 alter table public.contact_messages enable row level security;
 alter table public.newsletter_subscribers enable row level security;
 
@@ -272,5 +302,23 @@ grant update (is_read) on public.contact_messages to authenticated;
 grant insert, select, update, delete on public.products to authenticated;
 grant all privileges on public.customer_profiles, public.products, public.orders,
   public.order_items, public.customer_notifications, public.contact_messages,
-  public.newsletter_subscribers to service_role;
+  public.newsletter_subscribers, public.app_sessions to service_role;
 grant usage, select on all sequences in schema public to service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'product-images',
+  'product-images',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/bmp']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Public can view store product images" on storage.objects;
+create policy "Public can view store product images"
+on storage.objects for select to anon, authenticated
+using (bucket_id = 'product-images');

@@ -5,9 +5,10 @@ const fs = require("node:fs/promises");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const { randomBytes, scryptSync } = require("node:crypto");
+const { randomBytes, randomUUID, scryptSync } = require("node:crypto");
 const { after, before, test } = require("node:test");
 const { createServer } = require("./server");
+const { SupabaseStore } = require("./supabase-store");
 
 let server;
 let baseUrl;
@@ -608,6 +609,7 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
     request.once("error", reject);
     request.end();
   });
+
   assert.equal(localAdminResponse.statusCode, 308);
   assert.equal(localAdminResponse.headers.location, `${baseUrl}/admin.html`);
 
@@ -633,4 +635,224 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
     headers: { Origin: "https://untrusted.example" },
   });
   assert.equal(foreignOriginResponse.status, 403);
+});
+
+test("uses Supabase Auth and service-role credentials only in server-side requests", async () => {
+  const requests = [];
+  const store = new SupabaseStore({
+    url: "https://project.example",
+    anonKey: "test-anon-key",
+    serviceRoleKey: "test-service-role-key",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ access_token: "test-token", user: { id: "customer-uuid" } }),
+      };
+    },
+  });
+
+  await store.createAuthUser({
+    email: "customer@example.com",
+    password: "private-password",
+    firstName: "Customer",
+    lastName: "Test",
+  });
+  await store.signIn("customer@example.com", "private-password");
+
+  assert.equal(requests[0].url, "https://project.example/auth/v1/admin/users");
+  assert.equal(requests[0].options.headers.apikey, "test-service-role-key");
+  assert.equal(JSON.parse(requests[0].options.body).email_confirm, true);
+  assert.equal(requests[1].url, "https://project.example/auth/v1/token?grant_type=password");
+  assert.equal(requests[1].options.headers.apikey, "test-anon-key");
+  assert.equal(JSON.parse(requests[1].options.body).password, "private-password");
+});
+
+test("registers and reloads a customer profile through Supabase", async () => {
+  const authUserId = "a320aa2b-2cc4-471d-9a9a-d3381bb2d4cb";
+  let savedSession = null;
+  const requests = [];
+  const supabaseServer = createServer({
+    dataDir: path.join(os.tmpdir(), `am-supabase-route-${randomUUID()}`),
+    supabaseUrl: "https://project.example",
+    supabaseAnonKey: "test-anon-key",
+    supabaseServiceRoleKey: "test-service-role-key",
+    brevoApiKey: "",
+    brevoSenderEmail: "",
+    adminSmsNumbers: "",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      if (url.endsWith("/auth/v1/admin/users")) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ id: authUserId }) };
+      }
+      if (url.includes("/rest/v1/customer_profiles?select=*&order=created_at.desc")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify([{
+            id: authUserId,
+            first_name: "Amina",
+            last_name: "Test",
+            email: "supabase-customer@example.com",
+            phone: "+2348000000000",
+            address: "1 Test Street",
+            city: "Lagos",
+            region: "Lagos",
+            created_at: "2026-10-22T09:00:00.000Z",
+          }]),
+        };
+      }
+      if (url.includes("/rest/v1/app_sessions?select=*")) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(savedSession ? [savedSession] : []) };
+      }
+      if (url.includes("/rest/v1/orders?select=") || url.includes("/rest/v1/customer_notifications?select=")) {
+        return { ok: true, status: 200, text: async () => "[]" };
+      }
+      if (url.includes("/rest/v1/app_sessions?on_conflict=token_hash")) {
+        savedSession = JSON.parse(options.body);
+        return { ok: true, status: 201, text: async () => "" };
+      }
+      if (url.includes("/rest/v1/customer_profiles?on_conflict=id")
+        || url.includes("/rest/v1/customer_notifications")) {
+        return { ok: true, status: 201, text: async () => "" };
+      }
+      throw new Error(`Unexpected Supabase test request: ${url}`);
+    },
+  });
+  await new Promise((resolve, reject) => {
+    supabaseServer.once("error", reject);
+    supabaseServer.listen(0, "127.0.0.1", resolve);
+  });
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${supabaseServer.address().port}/api/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Amina",
+        lastName: "Test",
+        email: "supabase-customer@example.com",
+        phone: "+234 800 000 0000",
+        password: "a-strong-password",
+        address: "1 Test Street",
+        city: "Lagos",
+        region: "Lagos",
+      }),
+    });
+    assert.equal(response.status, 201);
+    const { customer } = await response.json();
+    assert.equal(customer.id, authUserId);
+    assert.equal(customer.email, "supabase-customer@example.com");
+    assert.equal("passwordHash" in customer, false);
+    assert.equal(savedSession.customer_id, authUserId);
+    assert.ok(requests.some((request) => request.url.endsWith("/auth/v1/admin/users")));
+    assert.ok(requests.every((request) => request.options.headers.apikey !== undefined));
+  } finally {
+    await new Promise((resolve) => supabaseServer.close(resolve));
+  }
+});
+
+test("maps Supabase orders and item snapshots to the storefront order shape", async () => {
+  const store = new SupabaseStore({
+    url: "https://project.example",
+    anonKey: "test-anon-key",
+    serviceRoleKey: "test-service-role-key",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify([{
+        id: "AM-12345678",
+        customer_id: "customer-uuid",
+        status: "Pending",
+        payment_method: "Bank transfer",
+        payment_status: "Pending admin confirmation",
+        subtotal: "68000.00",
+        delivery_fee: "3000.00",
+        delivery_estimate: false,
+        delivery_tier: "Ibadan special rate",
+        delivery_origin: "Ilishan-Remo, Ogun State",
+        customer_name: "Customer Test",
+        customer_email: "customer@example.com",
+        customer_phone: "+2348000000000",
+        delivery_street: "1 Test Street",
+        delivery_city: "Ibadan",
+        delivery_state: "Oyo",
+        total: "71000.00",
+        created_at: "2026-10-22T09:00:00.000Z",
+        updated_at: "2026-10-22T09:00:00.000Z",
+        order_items: [{
+          product_id: 1,
+          product_name: "The Everyday Curl",
+          image: "photo-example",
+          quantity: 1,
+          unit_price: "68000.00",
+        }],
+      }]),
+    }),
+  });
+
+  const [order] = await store.read("orders.json");
+  assert.equal(order.customerId, "customer-uuid");
+  assert.equal(order.customer.name, "Customer Test");
+  assert.equal(order.items[0].name, "The Everyday Curl");
+  assert.equal(order.items[0].price, 68000);
+  assert.equal(order.total, 71000);
+});
+
+test("persists server-created orders and customer sessions to Supabase", async () => {
+  const requests = [];
+  const store = new SupabaseStore({
+    url: "https://project.example",
+    anonKey: "test-anon-key",
+    serviceRoleKey: "test-service-role-key",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => (options.method === "GET" ? "[]" : ""),
+      };
+    },
+  });
+
+  await store.update("orders.json", (orders) => orders.unshift({
+    id: "AM-12345678",
+    customerId: "customer-uuid",
+    date: "2026-10-22T09:00:00.000Z",
+    status: "Pending",
+    paymentMethod: "Bank transfer",
+    paymentStatus: "Pending admin confirmation",
+    subtotal: 68000,
+    deliveryFee: 3000,
+    deliveryEstimate: false,
+    deliveryTier: "Ibadan special rate",
+    deliveryOrigin: "Ilishan-Remo, Ogun State",
+    customer: { name: "Customer Test", email: "customer@example.com", phone: "+2348000000000" },
+    deliveryAddress: { street: "1 Test Street", city: "Ibadan", state: "Oyo" },
+    items: [{ id: 1, name: "The Everyday Curl", image: "photo-example", quantity: 1, price: 68000 }],
+    total: 71000,
+  }));
+  await store.update("sessions.json", (sessions) => sessions.push({
+    tokenHash: "a".repeat(64),
+    role: "customer",
+    customerId: "customer-uuid",
+    expires: Date.parse("2026-10-29T09:00:00.000Z"),
+  }));
+
+  const orderInsert = requests.find((request) => request.url.endsWith("/rest/v1/orders"));
+  const itemInsert = requests.find((request) => request.url.endsWith("/rest/v1/order_items"));
+  const sessionInsert = requests.find((request) => request.url.includes("/rest/v1/app_sessions") && request.options.method === "POST");
+  assert.equal(JSON.parse(orderInsert.options.body).customer_id, "customer-uuid");
+  assert.equal(JSON.parse(orderInsert.options.body).total, 71000);
+  assert.equal(JSON.parse(itemInsert.options.body)[0].product_name, "The Everyday Curl");
+  assert.equal(JSON.parse(sessionInsert.options.body).token_hash, "a".repeat(64));
+  assert.equal(sessionInsert.options.headers.apikey, "test-service-role-key");
+});
+
+test("rejects partial Supabase configuration instead of silently using local storage", () => {
+  assert.throws(
+    () => createServer({ supabaseUrl: "https://project.example" }),
+    /SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY together/,
+  );
 });

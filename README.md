@@ -22,21 +22,21 @@ In Render, create a Web Service for this repository, leave the build command emp
 - `HOST` — `0.0.0.0` (also the production default).
 - `ADMIN_EMAIL` — the email used to sign in to the admin workspace.
 - `ADMIN_PASSWORD` — a long, unique password; keep it private.
-- `AM_DATA_DIR` — `/var/data`.
+- `AM_DATA_DIR` — `/var/data` only when using JSON storage and a persistent disk.
 
-Attach a persistent disk mounted at `/var/data` to keep customer accounts, sessions, orders, uploaded product images, and catalog edits across restarts and deployments. On first launch, the server copies the bundled starter catalog into that data directory. Without persistent storage, locally saved customer/order data can be lost when the service restarts or is redeployed. Do not upload the local `data/` records or `.env` file to GitHub.
+When using the JSON-file fallback, attach a persistent disk mounted at `/var/data` and set `AM_DATA_DIR=/var/data`; otherwise those records may be lost on restart or redeploy. When Supabase is configured, customer accounts, sessions, orders, products, contact messages, newsletter sign-ups, and uploaded product images are stored in Supabase instead, so a Render disk is not needed for that data. Do not upload the local `data/` records or `.env` file to GitHub.
 
-Brevo email and SMS settings are optional environment variables. Add them in Render only when configured; SMS also requires available Brevo credits. Set `PUBLIC_SITE_URL` to the public Render URL if order emails should include uploaded product images. After deployment, open the Render service URL (not the GitHub Pages URL) and use `/admin.html` for the admin workspace.
+Add the Supabase environment variables listed in [Supabase setup](#supabase-setup) to enable database storage. Brevo email and SMS settings are optional; SMS also requires available Brevo credits. Set `PUBLIC_SITE_URL` to the public Render URL if order emails should include uploaded product images. After deployment, open the Render service URL (not the GitHub Pages URL) and use `/admin.html` for the admin workspace.
 
 ## Admin workspace
 
 The protected admin workspace is at `http://127.0.0.1:3000/admin.html`. Admin credentials are kept separately from customer accounts in the private, ignored `data/admin.json` file. That file contains the admin email and a salted scrypt password hash, never the plain-text password. It is not served by the website. For hosted deployments, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` as private environment variables; use a long, unique password and never commit it.
 
-The workspace includes order, product, customer, and contact-message views. Admins can add, edit, and delete products; changes are saved to the data directory and appear in the storefront immediately. Product images can be selected from the device (JPEG, PNG, WebP, GIF, AVIF, or BMP, up to 5 MB), use an Unsplash photo ID, or use an HTTPS image URL. Uploaded image files are kept in the private data directory and served only through the app's image route. Order items keep an image snapshot so their thumbnails remain available after a product is removed. The admin order controls offer the valid next step for each order: confirm payment or cancel, start processing, mark shipped, mark in transit, then mark delivered. A transfer must be confirmed before fulfillment, and cancellation is only allowed while payment is unconfirmed. Those order updates appear in the customer's account. Keep the server on HTTPS before exposing admin access outside a trusted local network.
+The workspace includes order, product, customer, and contact-message views. Admins can add, edit, and delete products; changes are saved to the active storage and appear in the storefront immediately. Product images can be selected from the device (JPEG, PNG, WebP, GIF, AVIF, or BMP, up to 5 MB), use an Unsplash photo ID, or use an HTTPS image URL. Uploaded images use the private data directory in JSON mode and the `product-images` Supabase Storage bucket when Supabase is enabled. Order items keep an image snapshot so their thumbnails remain available after a product is removed. The admin order controls offer the valid next step for each order: confirm payment or cancel, start processing, mark shipped, mark in transit, then mark delivered. A transfer must be confirmed before fulfillment, and cancellation is only allowed while payment is unconfirmed. Those order updates appear in the customer's account. Keep the server on HTTPS before exposing admin access outside a trusted local network.
 
 ## Stored data
 
-The server creates private JSON files in `data/`:
+Without Supabase credentials, the server creates private JSON files in the configured data directory:
 
 - `users.json` contains customer contact/address details and salted scrypt password hashes. Passwords are never saved in plain text.
 - `admin.json` contains only the separate admin email, salt, and scrypt password hash. It is ignored by Git and not publicly served.
@@ -47,11 +47,16 @@ The server creates private JSON files in `data/`:
 
 These files are excluded by `.gitignore` and are not served by the website. Back them up securely; do not upload them to a public web folder or commit real customer data.
 
-## Supabase schema
+## Supabase setup
 
-`supabase-schema.sql` defines Supabase tables and row-level security for customer profiles, products, orders, order items, customer notifications, contact messages, and newsletter subscribers. Run it in the Supabase project's SQL Editor to create the schema. Customer profiles are linked to Supabase Auth users, and customer passwords are managed by Supabase Auth rather than stored in the profile table. Admin policies expect a trusted `app_metadata.role` value of `admin`.
+To use Supabase instead of JSON files:
 
-The current website server still reads and writes the local JSON files described above. Running the SQL does not transfer existing data or connect the website to Supabase. The server must be updated to use Supabase Auth and the new tables; keep the Supabase service-role key in server-only environment variables and never expose it to browser JavaScript. Existing accounts use the app's own password hashes and IDs, so they need a deliberate migration/sign-in plan before switching authentication.
+1. In the Supabase dashboard, open **SQL Editor**, paste all of `supabase-schema.sql`, and run it. It creates/updates the tables, policies, sample catalog, sessions table, and public product-image bucket.
+2. In Supabase **Project Settings → API**, copy the **Project URL**, the **anon/public (publishable) key**, and the **service_role/secret key**.
+3. In Render **Environment**, add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The server requires all three and uses them only on the server. Never put the service-role key in HTML/JavaScript, GitHub, or a message.
+4. Redeploy. The server will use Supabase Auth for customer passwords and Supabase tables/storage for customer profiles, sessions, products, orders, order items, notifications, contact messages, newsletter sign-ups, and uploaded product photos. If all three Supabase variables are absent, local development continues using JSON storage.
+
+The schema is safe to run again and seeds the example products only when their IDs are not already present. Existing accounts and order records in local JSON files are **not automatically copied** to Supabase. Since those passwords use the old app's hash format, customers will need to create new Supabase-backed accounts unless a separate migration/reset plan is arranged. Keep the local data backed up; do not upload it to GitHub.
 
 ## Brevo email and SMS notifications
 
