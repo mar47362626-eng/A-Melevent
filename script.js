@@ -440,6 +440,8 @@ function renderBag() {
   const count = state.bag.reduce((total, item) => total + item.quantity, 0);
   const total = state.bag.reduce((sum, item) => sum + products.find((product) => product.id === item.id).price * item.quantity, 0);
   document.querySelector("#bag-count").textContent = count;
+  const appBagCount = document.querySelector("#app-bag-count");
+  if (appBagCount) appBagCount.textContent = count;
   document.querySelector("#drawer-count").textContent = `(${count})`;
   document.querySelector("#bag-subtotal").textContent = formatPrice(total);
   document.querySelector("#bag-items").innerHTML = state.bag.map((item) => {
@@ -513,6 +515,7 @@ document.querySelector("#sort-select")?.addEventListener("change", (event) => {
   renderProducts();
 });
 document.querySelector("#bag-open").addEventListener("click", openBag);
+document.querySelector("[data-app-bag]")?.addEventListener("click", openBag);
 document.querySelector("#bag-close").addEventListener("click", closeBag);
 document.querySelector("#drawer-backdrop").addEventListener("click", closeBag);
 document.querySelector("#keep-shopping").addEventListener("click", closeBag);
@@ -704,6 +707,8 @@ loadProducts().catch((error) => {
     emptyState.querySelector("p").textContent = `${error.message} Check that the A&M server is running, then reload this page.`;
   }
   document.querySelector("#bag-count").textContent = "0";
+  const appBagCount = document.querySelector("#app-bag-count");
+  if (appBagCount) appBagCount.textContent = "0";
   document.querySelector("#drawer-count").textContent = "(0)";
   document.querySelector("#bag-subtotal").textContent = formatPrice(0);
   document.querySelector("#bag-empty").hidden = false;

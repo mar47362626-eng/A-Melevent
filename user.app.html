@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="Shop A&M's feel-good edit of wigs, beauty, fragrance, and shoes in a mobile-friendly app experience."
+    />
+    <meta name="theme-color" content="#f8f5f0" />
+    <title>A&M Shop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body class="user-app-page" data-category="All">
+    <header class="user-app-header">
+      <a class="brand" href="user.app.html" aria-label="A&M shop home">A<span>&</span>M<span class="brand-dot">.</span></a>
+      <div class="user-app-header-actions">
+        <a class="account-icon" href="account.html" aria-label="Your account" title="Your account">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path></svg>
+        </a>
+        <button class="user-app-bag" id="bag-open" type="button" aria-label="Open shopping bag">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>
+          <span>Bag</span><span class="bag-count" id="bag-count">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="user-app-main">
+      <section class="user-app-welcome" aria-labelledby="user-app-title">
+        <div class="user-app-welcome-copy">
+          <span class="eyebrow">A&M, picked for you</span>
+          <h1 id="user-app-title">A little more <em>you.</em></h1>
+          <p>Find feel-good favourites for your hair, skin, scent, and style.</p>
+          <label class="user-app-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+            <input id="search-input" type="search" placeholder="Search your next favourite" aria-label="Search products" />
+          </label>
+        </div>
+        <img
+          src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1000&q=85"
+          alt="A&M fashion and beauty collection"
+          fetchpriority="high"
+        />
+      </section>
+
+      <section class="user-app-categories" id="categories" aria-labelledby="user-app-categories-title">
+        <div class="user-app-section-heading">
+          <div><span class="eyebrow">Find your feel-good</span><h2 id="user-app-categories-title">Shop by category</h2></div>
+        </div>
+        <nav class="user-app-category-list" aria-label="Shop categories">
+          <a href="shop-all.html"><span aria-hidden="true">✳</span>Shop all</a>
+          <a href="wigs.html"><span aria-hidden="true">〰</span>Wigs</a>
+          <a href="beauty.html"><span aria-hidden="true">✧</span>Beauty</a>
+          <a href="fragrance.html"><span aria-hidden="true">◌</span>Fragrance</a>
+          <a href="shoes.html"><span aria-hidden="true">↗</span>Shoes</a>
+        </nav>
+      </section>
+
+      <section class="user-app-products" id="shop" aria-labelledby="shop-title">
+        <div class="user-app-section-heading user-app-product-heading">
+          <div><span class="eyebrow">A&M, picked for you</span><h2 id="shop-title">The good <em>stuff.</em></h2></div>
+          <label class="user-app-sort">Sort
+            <select id="sort-select" aria-label="Sort products">
+              <option value="featured">Featured</option>
+              <option value="low-high">Price: low to high</option>
+              <option value="high-low">Price: high to low</option>
+            </select>
+          </label>
+        </div>
+        <p class="user-app-results" id="results-count">Showing all favourites</p>
+        <div class="product-grid" id="product-grid" aria-live="polite"></div>
+        <div class="empty-state" id="empty-state" hidden>
+          <span>✳</span>
+          <h3>No favourites found just yet.</h3>
+          <p>Try another search or choose a different category.</p>
+          <a class="text-button" href="shop-all.html">Show me everything ↗</a>
+        </div>
+      </section>
+
+      <section class="user-app-promise">
+        <span aria-hidden="true">✳</span>
+        <p><strong>Good things for your everyday.</strong><br />Thoughtfully picked, easy to love.</p>
+      </section>
+    </main>
+
+    <nav class="user-app-tabs" aria-label="App navigation">
+      <a class="active" href="#shop" aria-current="page"><span aria-hidden="true">⌂</span>Shop</a>
+      <a href="#categories"><span aria-hidden="true">▦</span>Categories</a>
+      <button type="button" data-app-bag><span aria-hidden="true">♧</span>Bag<span class="user-app-tab-count" id="app-bag-count">0</span></button>
+      <a href="account.html"><span aria-hidden="true">♙</span>Account</a>
+    </nav>
+
+    <button class="chat-launcher" id="chat-open" type="button" aria-expanded="false" aria-controls="chat-panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 8 8 0 0 1-3.4-.8L4 20l1.5-4.2a7.3 7.3 0 0 1-1-3.8 7.5 7.5 0 1 1 15.5-.5Z"></path><path d="M9 10h6M9 13h4"></path></svg>
+      Ask A&amp;M
+    </button>
+    <section class="chat-panel" id="chat-panel" aria-labelledby="chat-title" hidden>
+      <div class="chat-header">
+        <div><span class="eyebrow">Here to help</span><h2 id="chat-title">Ask A&amp;M</h2></div>
+        <button class="chat-close" id="chat-close" type="button" aria-label="Close chat">×</button>
+      </div>
+      <div class="chat-content">
+        <p class="chat-greeting">Hi! Send us your question and we’ll continue the conversation with you on WhatsApp.</p>
+        <form class="chat-form" id="chat-form">
+          <label for="chat-name">Your name<input id="chat-name" name="name" autocomplete="name" required /></label>
+          <label for="chat-phone">Your phone number<input id="chat-phone" name="phone" type="tel" autocomplete="tel" required /></label>
+          <label for="chat-message">How can we help?<textarea id="chat-message" name="message" rows="3" required></textarea></label>
+          <button class="button button-dark" type="submit">Continue to WhatsApp ↗</button>
+          <p class="chat-note">WhatsApp will open with your details and message ready. Tap Send there to contact us.</p>
+          <p class="chat-form-status" id="chat-form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <aside class="bag-drawer" id="bag-drawer" aria-labelledby="bag-title" aria-hidden="true">
+      <div class="drawer-header">
+        <div><span class="eyebrow">Your feel-good finds</span><h2 id="bag-title">Your bag <span id="drawer-count">(0)</span></h2></div>
+        <button class="icon-button" id="bag-close" type="button" aria-label="Close shopping bag">×</button>
+      </div>
+      <div class="bag-items" id="bag-items"></div>
+      <div class="bag-empty" id="bag-empty"><span>✳</span><p>Your bag is waiting for something lovely.</p><button class="text-button" id="keep-shopping" type="button">Keep looking ↗</button></div>
+      <div class="drawer-footer" id="drawer-footer" hidden>
+        <div class="subtotal"><span>Subtotal</span><strong id="bag-subtotal">₦0</strong></div>
+        <p>Delivery is estimated from your saved address at checkout.</p>
+        <button class="button button-dark checkout-button" id="checkout-button" type="button">Continue to checkout <span>↗</span></button>
+        <span class="demo-note">Bank transfer · admin confirms payment</span>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
