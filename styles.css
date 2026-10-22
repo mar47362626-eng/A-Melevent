@@ -657,6 +657,8 @@ body.drawer-open { overflow: hidden; }
 .user-app-bag { display: flex; align-items: center; gap: 7px; padding: 8px 0; border: 0; background: transparent; cursor: pointer; font-size: 12px; }
 .user-app-bag svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .user-app-main { width: min(100%, 1040px); margin: 0 auto; padding: 20px clamp(16px, 4vw, 36px) 42px; }
+.user-app-sticky-top { position: sticky; z-index: 6; top: 64px; padding-bottom: 10px; background: #f7f5f1; }
+.user-app-sticky-top:has(.user-app-welcome[hidden]) { display: none; }
 .user-app-account .account-panel { width: min(100%, 680px); margin: 0 auto; padding: clamp(20px, 4vw, 38px); border-color: #eeeae4; border-radius: 16px; background: #fff; box-shadow: 0 5px 20px rgb(38 30 24 / 4%); }
 .user-app-account .account-panel h1 { font-size: clamp(29px, 6vw, 42px); }
 .user-app-account .account-intro { margin-bottom: 20px; }
@@ -740,6 +742,7 @@ body.drawer-open { overflow: hidden; }
   .user-app-page .drawer-header h2 { margin-top: 4px; font-size: 24px; }
   .user-app-page .bag-empty { min-height: 130px; }
   .user-app-page .bag-empty p { margin: 8px 0; }
+  .user-app-sticky-top { top: 58px; }
   .user-app-header { min-height: 58px; padding: 0 15px; }
   .user-app-header .brand { font-size: 26px; }
   .user-app-header-label { font-size: 8px; letter-spacing: .12em; }
