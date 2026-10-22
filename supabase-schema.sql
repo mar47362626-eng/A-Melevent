@@ -87,11 +87,33 @@ create table if not exists public.customer_notifications (
 
 create table if not exists public.app_sessions (
   token_hash text primary key check (token_hash ~ '^[a-f0-9]{64}$'),
-  role text not null check (role in ('customer', 'admin')),
+  role text not null,
   customer_id uuid references public.customer_profiles (id) on delete cascade,
   expires_at timestamptz not null,
-  created_at timestamptz not null default now(),
-  check ((role = 'customer' and customer_id is not null) or (role = 'admin' and customer_id is null))
+  created_at timestamptz not null default now()
+);
+
+alter table public.app_sessions drop constraint if exists app_sessions_role_check;
+alter table public.app_sessions drop constraint if exists app_sessions_check;
+alter table public.app_sessions
+  add constraint app_sessions_role_check check (role in ('customer', 'admin', 'hub')),
+  add constraint app_sessions_check check (
+    (role = 'customer' and customer_id is not null)
+    or (role in ('admin', 'hub') and customer_id is null)
+  );
+
+create table if not exists public.hub_staff_accounts (
+  id uuid primary key,
+  email text not null unique check (
+    email = lower(btrim(email))
+    and email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+  ),
+  password_salt text not null check (password_salt ~ '^[a-f0-9]{32}$'),
+  password_hash text not null check (password_hash ~ '^[a-f0-9]{128}$'),
+  verification_token_hash text check (verification_token_hash is null or verification_token_hash ~ '^[a-f0-9]{64}$'),
+  verification_expires_at timestamptz,
+  verified_at timestamptz,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.contact_messages (
@@ -198,6 +220,7 @@ alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.customer_notifications enable row level security;
 alter table public.app_sessions enable row level security;
+alter table public.hub_staff_accounts enable row level security;
 alter table public.contact_messages enable row level security;
 alter table public.newsletter_subscribers enable row level security;
 
@@ -300,9 +323,10 @@ grant update (status, payment_status, payment_confirmed_at)
   on public.orders to authenticated;
 grant update (is_read) on public.contact_messages to authenticated;
 grant insert, select, update, delete on public.products to authenticated;
+revoke all on public.hub_staff_accounts from public, anon, authenticated;
 grant all privileges on public.customer_profiles, public.products, public.orders,
   public.order_items, public.customer_notifications, public.contact_messages,
-  public.newsletter_subscribers, public.app_sessions to service_role;
+  public.newsletter_subscribers, public.app_sessions, public.hub_staff_accounts to service_role;
 grant usage, select on all sequences in schema public to service_role;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

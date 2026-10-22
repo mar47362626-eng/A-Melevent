@@ -16,6 +16,7 @@ let dataDir;
 let productsFile;
 let sessionCookie;
 let adminCookie;
+let hubCookie;
 let testOrderId;
 
 async function post(route, body, cookie = sessionCookie) {
@@ -40,6 +41,17 @@ async function adminPost(route, body, cookie = adminCookie) {
   });
 }
 
+async function hubPost(route, body, cookie = hubCookie) {
+  return fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 before(async () => {
   dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "am-store-test-"));
   productsFile = path.join(dataDir, "products.json");
@@ -50,11 +62,21 @@ before(async () => {
     passwordSalt: passwordSalt.toString("hex"),
     passwordHash: scryptSync("test-admin-secret", passwordSalt, 64).toString("hex"),
   })}\n`);
+  const hubPasswordSalt = randomBytes(16);
+  await fs.writeFile(path.join(dataDir, "hub-staff.json"), `${JSON.stringify([{
+    id: randomUUID(),
+    email: "hub@example.com",
+    passwordSalt: hubPasswordSalt.toString("hex"),
+    passwordHash: scryptSync("test-hub-secret", hubPasswordSalt, 64).toString("hex"),
+    verifiedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  }])}\n`);
   server = createServer({
     dataDir,
     productsFile,
     brevoApiKey: "",
     brevoSenderEmail: "",
+    hubRegistrationCode: "test-hub-invite",
     adminSmsNumbers: "",
   });
   await new Promise((resolve, reject) => {
@@ -264,6 +286,7 @@ test("keeps the customer session after a server restart and saves a server-price
     productsFile,
     brevoApiKey: "",
     brevoSenderEmail: "",
+    hubRegistrationCode: "test-hub-invite",
     adminSmsNumbers: "",
   });
   await new Promise((resolve, reject) => {
@@ -326,6 +349,33 @@ test("protects admin dashboard and supports verified order fulfillment actions",
     headers: { Cookie: adminCookie },
   });
   assert.equal(dashboardResponse.status, 200);
+  const unauthorizedHubOrder = await fetch(`${baseUrl}/api/hub/orders/${encodeURIComponent(testOrderId)}`);
+  assert.equal(unauthorizedHubOrder.status, 401);
+  const adminCookieHubAccess = await fetch(`${baseUrl}/api/hub/orders/${encodeURIComponent(testOrderId)}`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(adminCookieHubAccess.status, 401);
+  const badHubLogin = await hubPost("/api/hub/login", {
+    email: "hub@example.com",
+    password: "wrong",
+  }, null);
+  assert.equal(badHubLogin.status, 401);
+  const hubLogin = await hubPost("/api/hub/login", {
+    email: "HUB@example.com",
+    password: "test-hub-secret",
+  }, null);
+  assert.equal(hubLogin.status, 200);
+  assert.match(hubLogin.headers.get("set-cookie"), /am_hub_session=/);
+  hubCookie = hubLogin.headers.get("set-cookie").split(";")[0];
+  const hubDashboardAccess = await fetch(`${baseUrl}/api/admin/dashboard`, {
+    headers: { Cookie: hubCookie },
+  });
+  assert.equal(hubDashboardAccess.status, 401);
+  const hubOrderAccess = await fetch(`${baseUrl}/api/hub/orders/${encodeURIComponent(testOrderId)}`, {
+    headers: { Cookie: hubCookie },
+  });
+  assert.equal(hubOrderAccess.status, 200);
+  assert.equal((await hubOrderAccess.json()).order.id, testOrderId);
   const authenticatedSession = await fetch(`${baseUrl}/api/admin/session`, {
     headers: { Cookie: adminCookie },
   });
@@ -336,6 +386,7 @@ test("protects admin dashboard and supports verified order fulfillment actions",
     productsFile,
     brevoApiKey: "",
     brevoSenderEmail: "",
+    hubRegistrationCode: "test-hub-invite",
     adminSmsNumbers: "",
   });
   await new Promise((resolve, reject) => {
@@ -417,15 +468,21 @@ test("protects admin dashboard and supports verified order fulfillment actions",
   assert.equal(processing.status, 200);
   assert.equal((await processing.json()).order.status, "Processing");
 
-  const shipped = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "shipped" });
+  const picked = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "picked" });
+  assert.equal(picked.status, 200);
+  assert.equal((await picked.json()).order.status, "Picked");
+  const invalidHubAction = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "confirm_payment" });
+  assert.equal(invalidHubAction.status, 400);
+
+  const shipped = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "shipped" });
   assert.equal(shipped.status, 200);
   assert.equal((await shipped.json()).order.status, "Shipped");
 
-  const inTransit = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "in_transit" });
+  const inTransit = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "in_transit" });
   assert.equal(inTransit.status, 200);
   assert.equal((await inTransit.json()).order.status, "In transit");
 
-  const delivered = await adminPost(`/api/admin/orders/${testOrderId}/action`, { action: "delivered" });
+  const delivered = await hubPost(`/api/hub/orders/${testOrderId}/action`, { action: "delivered" });
   assert.equal(delivered.status, 200);
   assert.equal((await delivered.json()).order.status, "Delivered");
 
@@ -439,6 +496,7 @@ test("protects admin dashboard and supports verified order fulfillment actions",
   assert.equal(customer.orders[0].items[0].quantity, 2);
   assert.equal(customer.orders[0].items[1].image, "photo-1608248543803-ba4f8c70ae0b");
   assert.match(customer.inbox[0].message, /Delivered/);
+  assert.ok(customer.inbox.some((message) => /Picked/.test(message.message)));
 
   const customerLogin = await post("/api/login", {
     email: "amina@example.com",
@@ -446,6 +504,13 @@ test("protects admin dashboard and supports verified order fulfillment actions",
   }, null);
   assert.equal(customerLogin.status, 200);
   assert.equal((await customerLogin.json()).customer.orders[0].status, "Delivered");
+
+  const hubLogout = await hubPost("/api/hub/logout", {}, hubCookie);
+  assert.equal(hubLogout.status, 200);
+  const hubAfterLogout = await fetch(`${baseUrl}/api/hub/orders/${encodeURIComponent(testOrderId)}`, {
+    headers: { Cookie: hubCookie },
+  });
+  assert.equal(hubAfterLogout.status, 401);
 
   const logout = await adminPost("/api/admin/logout", {});
   assert.equal(logout.status, 200);
@@ -480,7 +545,7 @@ test("persists contact messages and newsletter sign-ups", async () => {
   assert.equal(subscribers[0].email, "news@example.com");
 });
 
-test("sends Brevo welcome, customer/admin order emails, and transactional order SMS", async () => {
+test("verifies hub staff email and sends customer/admin pickup notifications", async () => {
   const notificationDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "am-brevo-test-"));
   const notificationProductsFile = path.join(notificationDataDir, "products.json");
   await fs.copyFile(path.join(__dirname, "data", "products.json"), notificationProductsFile);
@@ -490,6 +555,7 @@ test("sends Brevo welcome, customer/admin order emails, and transactional order 
     productsFile: notificationProductsFile,
     brevoApiKey: "test-brevo-key",
     brevoSenderEmail: "store@example.com",
+    hubRegistrationCode: "test-hub-invite",
     notificationAdminEmail: "ayomideoluniyi49@gmail.com",
     brevoSmsSender: "AMStore",
     adminSmsNumbers: "2348000000001, 2348000000002",
@@ -592,6 +658,77 @@ test("sends Brevo welcome, customer/admin order emails, and transactional order 
     const statusSms = brevoRequests.find((request) => request.url.endsWith("/transactionalSMS/sms") && /confirmed your bank transfer/i.test(request.body.content));
     assert.ok(statusSms);
     assert.equal(statusSms.body.recipient, "+2348090000001");
+
+    const processingResponse = await fetch(`${notificationBaseUrl}/api/admin/orders/${encodeURIComponent(order.id)}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: adminSessionCookie },
+      body: JSON.stringify({ action: "processing" }),
+    });
+    assert.equal(processingResponse.status, 200);
+    const pickedResponse = await fetch(`${notificationBaseUrl}/api/admin/orders/${encodeURIComponent(order.id)}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: adminSessionCookie },
+      body: JSON.stringify({ action: "picked" }),
+    });
+    assert.equal(pickedResponse.status, 200);
+    const pickedEmail = brevoRequests.find((request) => request.url.endsWith("/smtp/email") && request.body.subject.includes("Picked"));
+    assert.ok(pickedEmail);
+    assert.equal(pickedEmail.body.to[0].email, "brevo-customer@example.com");
+    assert.match(pickedEmail.body.textContent, /picked at our hub/i);
+    const pickedAdminEmail = brevoRequests.find((request) => request.url.endsWith("/smtp/email") && request.body.subject.includes("picked at the hub"));
+    assert.ok(pickedAdminEmail);
+    assert.equal(pickedAdminEmail.body.to[0].email, "ayomideoluniyi49@gmail.com");
+    assert.match(pickedAdminEmail.body.textContent, new RegExp(order.id));
+
+    const hubRegistrationResponse = await fetch(`${notificationBaseUrl}/api/hub/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "hub-staff@example.com",
+        password: "a-long-test-password",
+        inviteCode: "test-hub-invite",
+      }),
+    });
+    assert.equal(hubRegistrationResponse.status, 201);
+    assert.deepEqual(await hubRegistrationResponse.json(), {
+      ok: true,
+      verificationRequired: true,
+      message: "We sent a verification code to your email. Enter it to activate your hub account.",
+    });
+    const verificationEmail = brevoRequests.find((request) =>
+      request.url.endsWith("/smtp/email") && request.body.to[0].email === "hub-staff@example.com");
+    assert.ok(verificationEmail);
+    assert.match(verificationEmail.body.subject, /verify/i);
+    const verificationCode = verificationEmail.body.textContent.match(/code is (\d{6})/)[1];
+    const unverifiedLogin = await fetch(`${notificationBaseUrl}/api/hub/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "hub-staff@example.com", password: "a-long-test-password" }),
+    });
+    assert.equal(unverifiedLogin.status, 401);
+    const invalidInvite = await fetch(`${notificationBaseUrl}/api/hub/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "intruder@example.com",
+        password: "a-long-test-password",
+        inviteCode: "wrong-code",
+      }),
+    });
+    assert.equal(invalidInvite.status, 400);
+    const verifyResponse = await fetch(`${notificationBaseUrl}/api/hub/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "hub-staff@example.com", code: verificationCode }),
+    });
+    assert.equal(verifyResponse.status, 200);
+    const verifiedLogin = await fetch(`${notificationBaseUrl}/api/hub/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "hub-staff@example.com", password: "a-long-test-password" }),
+    });
+    assert.equal(verifiedLogin.status, 200);
+    assert.match(verifiedLogin.headers.get("set-cookie"), /am_hub_session=/);
   } finally {
     await new Promise((resolve) => notificationServer.close(resolve));
     await fs.rm(notificationDataDir, { recursive: true, force: true });
@@ -619,6 +756,11 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   assert.equal(paymentPageResponse.status, 200);
   const adminPageResponse = await fetch(`${baseUrl}/admin.html`);
   assert.equal(adminPageResponse.status, 200);
+  const hubPageResponse = await fetch(`${baseUrl}/hub.html`);
+  assert.equal(hubPageResponse.status, 200);
+  assert.match(await hubPageResponse.text(), /A&M Fulfillment Hub/);
+  const shortHubPageResponse = await fetch(`${baseUrl}/hub`);
+  assert.equal(shortHubPageResponse.status, 200);
   const shortAdminPageResponse = await fetch(`${baseUrl}/admin`);
   assert.equal(shortAdminPageResponse.status, 200);
   assert.match(await shortAdminPageResponse.text(), /A&M Admin/);
@@ -667,6 +809,46 @@ test("uses Supabase Auth and service-role credentials only in server-side reques
   assert.equal(requests[1].url, "https://project.example/auth/v1/token?grant_type=password");
   assert.equal(requests[1].options.headers.apikey, "test-anon-key");
   assert.equal(JSON.parse(requests[1].options.body).password, "private-password");
+});
+
+test("stores hub staff credentials and verification state in Supabase", async () => {
+  const requests = [];
+  let savedAccount;
+  const store = new SupabaseStore({
+    url: "https://project.example",
+    anonKey: "test-anon-key",
+    serviceRoleKey: "test-service-role-key",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      if (options.method === "GET") {
+        return { ok: true, status: 200, text: async () => JSON.stringify(savedAccount ? [savedAccount] : []) };
+      }
+      savedAccount = JSON.parse(options.body);
+      return { ok: true, status: 201, text: async () => "" };
+    },
+  });
+
+  const passwordSalt = randomBytes(16).toString("hex");
+  const passwordHash = randomBytes(64).toString("hex");
+  await store.update("hub-staff.json", (accounts) => {
+    accounts.push({
+      id: randomUUID(),
+      email: "hub@example.com",
+      passwordSalt,
+      passwordHash,
+      verificationTokenHash: "a".repeat(64),
+      verificationExpires: Date.now() + 60_000,
+      verifiedAt: null,
+      createdAt: new Date().toISOString(),
+    });
+  });
+  const accounts = await store.read("hub-staff.json");
+  assert.equal(accounts[0].email, "hub@example.com");
+  assert.equal(accounts[0].passwordSalt, passwordSalt);
+  assert.equal(accounts[0].passwordHash, passwordHash);
+  assert.equal(accounts[0].verificationTokenHash, "a".repeat(64));
+  assert.ok(requests.some((request) => request.url.endsWith("/rest/v1/hub_staff_accounts")));
+  assert.ok(requests.every((request) => request.options.headers.apikey === "test-service-role-key"));
 });
 
 test("registers and reloads a customer profile through Supabase", async () => {

@@ -201,6 +201,19 @@ class SupabaseStore {
         const rows = await this.request("/rest/v1/newsletter_subscribers?select=*&order=subscribed_at.desc");
         return rows.map((row) => ({ email: row.email, subscribedAt: row.subscribed_at }));
       }
+      case "hub-staff.json": {
+        const rows = await this.request("/rest/v1/hub_staff_accounts?select=*&order=created_at.asc");
+        return rows.map((row) => ({
+          id: row.id,
+          email: row.email,
+          passwordSalt: row.password_salt,
+          passwordHash: row.password_hash,
+          verificationTokenHash: row.verification_token_hash,
+          verificationExpires: row.verification_expires_at ? new Date(row.verification_expires_at).getTime() : null,
+          verifiedAt: row.verified_at,
+          createdAt: row.created_at,
+        }));
+      }
       default:
         throw new Error(`Supabase storage does not support ${name}.`);
     }
@@ -325,6 +338,25 @@ class SupabaseStore {
             prefer: "resolution=ignore-duplicates,return=minimal",
           });
         }, async (row) => this.request(`/rest/v1/newsletter_subscribers?email=eq.${encodeURIComponent(row.email)}`, { method: "DELETE" }));
+      case "hub-staff.json":
+        return this.syncRows(before, after, (row) => row.email, async (row, previous) => {
+          const record = {
+            email: row.email,
+            password_salt: row.passwordSalt,
+            password_hash: row.passwordHash,
+            verification_token_hash: row.verificationTokenHash || null,
+            verification_expires_at: row.verificationExpires ? new Date(row.verificationExpires).toISOString() : null,
+            verified_at: row.verifiedAt || null,
+            created_at: row.createdAt,
+          };
+          await this.request(previous
+            ? `/rest/v1/hub_staff_accounts?email=eq.${encodeURIComponent(row.email)}`
+            : "/rest/v1/hub_staff_accounts", {
+            method: previous ? "PATCH" : "POST",
+            body: record,
+            prefer: "return=minimal",
+          });
+        }, async (row) => this.request(`/rest/v1/hub_staff_accounts?email=eq.${encodeURIComponent(row.email)}`, { method: "DELETE" }));
       default:
         throw new Error(`Supabase storage does not support ${name}.`);
     }

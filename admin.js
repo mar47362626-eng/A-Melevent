@@ -75,7 +75,8 @@ function availableOrderActions(order) {
   if (order.status === "Paid — processing" || order.status === "Confirmed — payment received") {
     return [["processing", "Start processing"]];
   }
-  if (order.status === "Processing") return [["shipped", "Mark shipped"]];
+  if (order.status === "Processing") return [["picked", "Mark picked"], ["shipped", "Mark shipped"]];
+  if (order.status === "Picked") return [["shipped", "Mark shipped"]];
   if (order.status === "Shipped") return [["in_transit", "Mark in transit"]];
   if (order.status === "In transit") return [["delivered", "Mark delivered"]];
   return [];
@@ -86,6 +87,7 @@ function orderActionControl(order) {
   const allActions = [
     ["confirm_payment", "Confirm payment"],
     ["processing", "Start processing"],
+    ["picked", "Mark picked"],
     ["shipped", "Mark shipped"],
     ["in_transit", "Mark in transit"],
     ["delivered", "Mark delivered"],

@@ -2,7 +2,7 @@
 
 const http = require("node:http");
 const path = require("node:path");
-const { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } = require("node:crypto");
+const { createHash, randomBytes, randomInt, randomUUID, scrypt, timingSafeEqual } = require("node:crypto");
 const { promisify } = require("node:util");
 const fs = require("node:fs/promises");
 const fsSync = require("node:fs");
@@ -29,14 +29,16 @@ const PRODUCT_CATEGORIES = new Set(["Wigs", "Beauty", "Fragrance", "Shoes"]);
 const STATIC_FILES = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/admin", ["admin.html", "text/html; charset=utf-8"]],
-  ...["index.html", "shop-all.html", "wigs.html", "beauty.html", "fragrance.html", "shoes.html", "account.html", "checkout.html", "payment.html", "admin.html"]
+  ["/hub", ["hub.html", "text/html; charset=utf-8"]],
+  ...["index.html", "shop-all.html", "wigs.html", "beauty.html", "fragrance.html", "shoes.html", "account.html", "checkout.html", "payment.html", "admin.html", "hub.html"]
     .map((name) => [`/${name}`, [name, "text/html; charset=utf-8"]]),
   ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
   ["/script.js", ["script.js", "text/javascript; charset=utf-8"]],
   ["/checkout.js", ["checkout.js", "text/javascript; charset=utf-8"]],
   ["/admin.js", ["admin.js", "text/javascript; charset=utf-8"]],
+  ["/hub.js", ["hub.js", "text/javascript; charset=utf-8"]],
 ]);
-const ADMIN_ORDER_ACTIONS = new Set(["confirm_payment", "processing", "shipped", "in_transit", "delivered", "cancel"]);
+const ADMIN_ORDER_ACTIONS = new Set(["confirm_payment", "processing", "picked", "shipped", "in_transit", "delivered", "cancel"]);
 
 function createStore(dataDir) {
   const pendingWrites = new Map();
@@ -341,6 +343,7 @@ function createServer({
   brevoApiKey = process.env.BREVO_API_KEY || "",
   brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || "",
   brevoSenderName = process.env.BREVO_SENDER_NAME || "A&M",
+  hubRegistrationCode = process.env.HUB_REGISTRATION_CODE || "",
   notificationAdminEmail = process.env.BREVO_ADMIN_EMAIL || "ayomideoluniyi49@gmail.com",
   brevoSmsSender = process.env.BREVO_SMS_SENDER || "AMStore",
   adminSmsNumbers = process.env.BREVO_ADMIN_SMS_NUMBERS || "",
@@ -568,6 +571,7 @@ function createServer({
     const statusMessages = {
       confirm_payment: "We’ve confirmed your bank transfer and are preparing your order.",
       processing: "Your order is being prepared.",
+      picked: "Your order has been picked at our hub and is being prepared for dispatch.",
       shipped: "Your order has been shipped.",
       in_transit: "Your order is on its way.",
       delivered: "Your order has been delivered. We hope you love it!",
@@ -579,7 +583,7 @@ function createServer({
       + `<p style="margin:0 0 18px;color:#615b54;font-size:14px;line-height:1.7;">Order <strong>${escapeHtml(order.id)}</strong><br>`
       + `Current status: <strong>${escapeHtml(order.status)}</strong><br>`
       + `Payment: ${escapeHtml(order.paymentStatus)}</p>`;
-    await Promise.all([
+    const notifications = [
       notify("Brevo order status email", () => sendBrevoEmail({
         to: order.customer.email,
         subject: `A&M order ${order.id}: ${order.status}`,
@@ -594,7 +598,20 @@ function createServer({
         order.customer.phone,
         `A&M: ${order.id} - ${statusMessage}`.slice(0, 150),
       )),
-    ]);
+    ];
+    if (action === "picked") {
+      notifications.push(notify("Brevo hub-picked admin email", () => sendBrevoEmail({
+        to: notificationAdminEmail,
+        subject: `A&M order ${order.id} picked at the hub`,
+        textContent: `Order ${order.id} has been picked at the fulfillment hub.\nCustomer: ${order.customer.name}\nEmail: ${order.customer.email}\nPhone: ${order.customer.phone}\nStatus: ${order.status}\nPayment: ${order.paymentStatus}`,
+        htmlContent: emailLayout({
+          title: "An order was picked at the hub",
+          greeting: `The fulfillment hub has picked order ${order.id}.`,
+          content: `${statusCallout}<p style="color:#615b54;font-size:14px;line-height:1.7;">Customer: <strong>${escapeHtml(order.customer.name)}</strong><br>Email: ${escapeHtml(order.customer.email)}<br>Phone: ${escapeHtml(order.customer.phone)}</p>${orderSummaryHtml(order)}`,
+        }),
+      })));
+    }
+    await Promise.all(notifications);
   }
 
   function updateProducts(callback) {
@@ -627,7 +644,7 @@ function createServer({
     return true;
   }
 
-  async function createSession(response, sessionData) {
+  async function createSession(response, sessionData, cookieName = "am_session") {
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const expires = Date.now() + SESSION_TTL_MS;
@@ -636,7 +653,7 @@ function createServer({
       activeSessions.push({ tokenHash, ...sessionData, expires });
       sessions.splice(0, sessions.length, ...activeSessions);
     });
-    response.setHeader("Set-Cookie", `am_session=${encodeURIComponent(token)}; ${cookieOptions(production)}`);
+    response.setHeader("Set-Cookie", `${cookieName}=${encodeURIComponent(token)}; ${cookieOptions(production)}`);
   }
 
   async function getSession(request) {
@@ -665,6 +682,76 @@ function createServer({
   async function adminForSession(request) {
     const session = await getSession(request);
     return session?.role === "admin" ? session : null;
+  }
+
+  async function hubForSession(request) {
+    const token = parseCookies(request.headers.cookie).am_hub_session;
+    if (!token) return null;
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const sessions = await store.read("sessions.json");
+    return sessions.find((entry) => entry.tokenHash === tokenHash && entry.expires > Date.now() && entry.role === "hub") || null;
+  }
+
+  async function applyOrderAction(orderId, action) {
+    let updatedOrder;
+    await store.update("orders.json", (orders) => {
+      const order = orders.find((entry) => entry.id === orderId);
+      if (!order) {
+        const error = new Error("Order not found.");
+        error.status = 404;
+        throw error;
+      }
+      if (action === "confirm_payment") {
+        if (order.paymentStatus === "Confirmed" || order.status === "Cancelled") {
+          const error = new Error("This order cannot be payment-confirmed in its current state.");
+          error.status = 409;
+          throw error;
+        }
+        order.paymentStatus = "Confirmed";
+        order.status = "Paid — processing";
+        order.paymentConfirmedAt = new Date().toISOString();
+      } else if (action === "cancel") {
+        if (order.paymentStatus === "Confirmed" || order.status === "Delivered" || order.status === "Cancelled") {
+          const error = new Error("Only an order with unconfirmed payment can be cancelled here.");
+          error.status = 409;
+          throw error;
+        }
+        order.status = "Cancelled";
+      } else {
+        const allowedTransitions = {
+          processing: { from: ["Paid — processing", "Confirmed — payment received"], to: "Processing" },
+          picked: { from: "Processing", to: "Picked" },
+          shipped: { from: ["Processing", "Picked"], to: "Shipped" },
+          in_transit: { from: "Shipped", to: "In transit" },
+          delivered: { from: "In transit", to: "Delivered" },
+        };
+        const transition = allowedTransitions[action];
+        const allowedFrom = Array.isArray(transition?.from) ? transition.from : [transition?.from];
+        if (!transition || !allowedFrom.includes(order.status) || order.paymentStatus !== "Confirmed") {
+          const error = new Error("This order must have confirmed payment and be in the previous delivery stage.");
+          error.status = 409;
+          throw error;
+        }
+        order.status = transition.to;
+      }
+      order.updatedAt = new Date().toISOString();
+      updatedOrder = { ...order };
+    });
+    const customerMessage = action === "confirm_payment"
+      ? "Your bank transfer has been confirmed. A&M is preparing your order."
+      : `Your order status is now: ${updatedOrder.status}.`;
+    await store.update("users.json", (users) => {
+      const customer = users.find((user) => user.id === updatedOrder.customerId);
+      if (customer) {
+        customer.inbox.unshift({
+          id: randomUUID(),
+          subject: `Order ${updatedOrder.id} update`,
+          message: customerMessage,
+          date: updatedOrder.updatedAt,
+        });
+      }
+    });
+    return updatedOrder;
   }
 
   async function adminDashboardData() {
@@ -770,6 +857,255 @@ function createServer({
       }
       await createSession(response, { role: "admin" });
       json(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/hub/register") {
+      if (!rateLimit(request, "hub-register", 4)) {
+        json(response, 429, { error: "Too many registration attempts. Please wait and try again." });
+        return;
+      }
+      if (!hubRegistrationCode) {
+        json(response, 503, { error: "Hub registration is not configured. Ask the store admin to set HUB_REGISTRATION_CODE." });
+        return;
+      }
+      const body = await readJsonBody(request);
+      const email = normalizeText(body.email, 254).toLowerCase();
+      const password = typeof body.password === "string" ? body.password : "";
+      const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode : "";
+      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      const inviteHash = createHash("sha256").update(inviteCode).digest();
+      const expectedInviteHash = createHash("sha256").update(hubRegistrationCode).digest();
+      if (!validEmail || password.length < 10 || password.length > 128 || !timingSafeEqual(inviteHash, expectedInviteHash)) {
+        json(response, 400, { error: "Enter a valid email, a password of at least 10 characters, and the correct hub invitation code." });
+        return;
+      }
+      const passwordSalt = randomBytes(16);
+      const passwordHash = (await scryptAsync(password, passwordSalt, 64)).toString("hex");
+      const verificationCode = randomInt(100000, 1_000_000).toString();
+      const verificationTokenHash = createHash("sha256").update(verificationCode).digest("hex");
+      const account = {
+        id: randomUUID(),
+        email,
+        passwordSalt: passwordSalt.toString("hex"),
+        passwordHash,
+        verificationTokenHash,
+        verificationExpires: Date.now() + 15 * 60 * 1000,
+        verifiedAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      try {
+        await store.update("hub-staff.json", (accounts) => {
+          if (accounts.some((entry) => entry.email === email)) {
+            const error = new Error("An account with that email already exists. Sign in or request a new verification code.");
+            error.status = 409;
+            throw error;
+          }
+          accounts.push(account);
+          return { value: account.id };
+        });
+      } catch (error) {
+        if (error.status) {
+          json(response, error.status, { error: error.message });
+          return;
+        }
+        throw error;
+      }
+      try {
+        await sendBrevoEmail({
+          to: email,
+          subject: "Verify your A&M fulfillment hub email",
+          textContent: `Your A&M fulfillment hub verification code is ${verificationCode}. It expires in 15 minutes. If you did not request an account, you can ignore this email.`,
+          htmlContent: emailLayout({
+            title: "Verify your hub email",
+            greeting: "Use this code to finish creating your A&M fulfillment hub account.",
+            content: `<p style="margin:0 0 18px;padding:18px;background:#fbf4ef;color:#29251f;font-size:28px;font-weight:bold;letter-spacing:8px;text-align:center;">${verificationCode}</p><p style="color:#615b54;font-size:13px;line-height:1.7;">This code expires in 15 minutes. If you did not request an account, you can ignore this email.</p>`,
+          }),
+        });
+      } catch (error) {
+        console.error("Hub registration verification email could not be sent:", error.message);
+        json(response, 503, { error: "Your account was saved, but the verification email could not be sent. Check the email setup and request another code." });
+        return;
+      }
+      json(response, 201, { ok: true, verificationRequired: true, message: "We sent a verification code to your email. Enter it to activate your hub account." });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/hub/verify") {
+      if (!rateLimit(request, "hub-verify", 8)) {
+        json(response, 429, { error: "Too many verification attempts. Request a new code and try again." });
+        return;
+      }
+      const body = await readJsonBody(request);
+      const email = normalizeText(body.email, 254).toLowerCase();
+      const code = typeof body.code === "string" ? body.code.trim() : "";
+      if (!/^\d{6}$/.test(code)) {
+        json(response, 400, { error: "Enter the six-digit code from your email." });
+        return;
+      }
+      let verified = false;
+      await store.update("hub-staff.json", (accounts) => {
+        const account = accounts.find((entry) => entry.email === email);
+        if (account && !account.verifiedAt && account.verificationExpires > Date.now()) {
+          const suppliedHash = createHash("sha256").update(code).digest();
+          const expectedHash = Buffer.from(account.verificationTokenHash || "", "hex");
+          if (expectedHash.length === suppliedHash.length && timingSafeEqual(suppliedHash, expectedHash)) {
+            account.verifiedAt = new Date().toISOString();
+            delete account.verificationTokenHash;
+            delete account.verificationExpires;
+            verified = true;
+          }
+        }
+        return { value: verified };
+      });
+      if (!verified) {
+        json(response, 400, { error: "That verification code is invalid or expired. Request a new code and try again." });
+        return;
+      }
+      json(response, 200, { ok: true, message: "Email verified. You can now sign in to the hub." });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/hub/resend-verification") {
+      if (!rateLimit(request, "hub-resend", 3)) {
+        json(response, 429, { error: "Too many code requests. Please wait before requesting another." });
+        return;
+      }
+      if (!hubRegistrationCode) {
+        json(response, 503, { error: "Hub registration is not configured. Ask the store admin to set HUB_REGISTRATION_CODE." });
+        return;
+      }
+      const body = await readJsonBody(request);
+      const email = normalizeText(body.email, 254).toLowerCase();
+      const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode : "";
+      const inviteHash = createHash("sha256").update(inviteCode).digest();
+      const expectedInviteHash = createHash("sha256").update(hubRegistrationCode).digest();
+      if (!timingSafeEqual(inviteHash, expectedInviteHash)) {
+        json(response, 400, { error: "Enter the correct hub invitation code." });
+        return;
+      }
+      const verificationCode = randomInt(100000, 1_000_000).toString();
+      let accountFound = false;
+      await store.update("hub-staff.json", (accounts) => {
+        const account = accounts.find((entry) => entry.email === email && !entry.verifiedAt);
+        if (account) {
+          account.verificationTokenHash = createHash("sha256").update(verificationCode).digest("hex");
+          account.verificationExpires = Date.now() + 15 * 60 * 1000;
+          accountFound = true;
+        }
+        return { value: accountFound, write: accountFound };
+      });
+      if (accountFound) {
+        try {
+          await sendBrevoEmail({
+            to: email,
+            subject: "Your A&M fulfillment hub verification code",
+            textContent: `Your A&M fulfillment hub verification code is ${verificationCode}. It expires in 15 minutes.`,
+            htmlContent: emailLayout({
+              title: "Your verification code",
+              greeting: "Enter this code on the fulfillment hub to verify your email address.",
+              content: `<p style="margin:0;padding:18px;background:#fbf4ef;color:#29251f;font-size:28px;font-weight:bold;letter-spacing:8px;text-align:center;">${verificationCode}</p><p style="color:#615b54;font-size:13px;">This code expires in 15 minutes.</p>`,
+            }),
+          });
+        } catch (error) {
+          console.error("Hub verification resend email could not be sent:", error.message);
+          json(response, 503, { error: "The verification email could not be sent. Check Brevo settings and try again." });
+          return;
+        }
+      }
+      json(response, 200, { ok: true, message: "If that email has a pending account, a new verification code has been sent." });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/hub/login") {
+      if (!rateLimit(request, "hub-login", 6)) {
+        json(response, 429, { error: "Too many hub sign-in attempts. Please wait and try again." });
+        return;
+      }
+      const body = await readJsonBody(request);
+      const email = normalizeText(body.email, 254).toLowerCase();
+      const password = typeof body.password === "string" ? body.password : "";
+      const accounts = await store.read("hub-staff.json");
+      const account = accounts.find((entry) => entry.email === email);
+      if (!account || !account.verifiedAt || password.length > 128) {
+        json(response, 401, { error: "Hub email or password is incorrect." });
+        return;
+      }
+      if (!/^[a-f0-9]{32}$/i.test(account.passwordSalt) || !/^[a-f0-9]{128}$/i.test(account.passwordHash)) {
+        json(response, 503, { error: "This hub account is invalid. Contact the store admin." });
+        return;
+      }
+      const suppliedPasswordHash = await scryptAsync(password, Buffer.from(account.passwordSalt, "hex"), 64);
+      const expectedPasswordHash = Buffer.from(account.passwordHash, "hex");
+      if (!timingSafeEqual(suppliedPasswordHash, expectedPasswordHash)) {
+        json(response, 401, { error: "Hub email or password is incorrect." });
+        return;
+      }
+      await createSession(response, { role: "hub" }, "am_hub_session");
+      json(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/hub/session") {
+      json(response, 200, { authenticated: Boolean(await hubForSession(request)) });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/hub/logout") {
+      const session = await hubForSession(request);
+      if (session) {
+        await store.update("sessions.json", (sessions) => {
+          const index = sessions.findIndex((entry) => entry.tokenHash === session.tokenHash);
+          if (index !== -1) sessions.splice(index, 1);
+        });
+      }
+      response.setHeader("Set-Cookie", `am_hub_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${production ? "; Secure" : ""}`);
+      json(response, 200, { ok: true });
+      return;
+    }
+
+    const hubOrderRoute = url.pathname.match(/^\/api\/hub\/orders\/([^/]+)$/);
+    if (request.method === "GET" && hubOrderRoute) {
+      if (!await hubForSession(request)) {
+        json(response, 401, { error: "Please sign in to the fulfillment hub." });
+        return;
+      }
+      const orderId = decodeURIComponent(hubOrderRoute[1]);
+      const orders = await store.read("orders.json");
+      const order = orders.find((entry) => entry.id === orderId);
+      if (!order) {
+        json(response, 404, { error: "No order was found with that order number." });
+        return;
+      }
+      json(response, 200, { order });
+      return;
+    }
+
+    const hubOrderAction = url.pathname.match(/^\/api\/hub\/orders\/([^/]+)\/action$/);
+    if (request.method === "POST" && hubOrderAction) {
+      if (!await hubForSession(request)) {
+        json(response, 401, { error: "Please sign in to the fulfillment hub." });
+        return;
+      }
+      const orderId = decodeURIComponent(hubOrderAction[1]);
+      const body = await readJsonBody(request);
+      const hubActions = new Set(["picked", "shipped", "in_transit", "delivered"]);
+      if (!hubActions.has(body.action)) {
+        json(response, 400, { error: "Choose a valid fulfillment action." });
+        return;
+      }
+      try {
+        const updatedOrder = await applyOrderAction(orderId, body.action);
+        await sendOrderStatusNotifications(updatedOrder, body.action);
+        json(response, 200, { order: updatedOrder });
+      } catch (error) {
+        if (error.status) {
+          json(response, error.status, { error: error.message });
+          return;
+        }
+        console.error("Could not update hub order:", error);
+        json(response, 500, { error: "We couldn't update this order. Please try again." });
+      }
       return;
     }
 
@@ -944,63 +1280,10 @@ function createServer({
         json(response, 400, { error: "Choose a valid order action." });
         return;
       }
-      let updatedOrder;
       try {
-        await store.update("orders.json", (orders) => {
-          const order = orders.find((entry) => entry.id === orderId);
-          if (!order) {
-            const error = new Error("Order not found.");
-            error.status = 404;
-            throw error;
-          }
-          if (body.action === "confirm_payment") {
-            if (order.paymentStatus === "Confirmed" || order.status === "Cancelled") {
-              const error = new Error("This order cannot be payment-confirmed in its current state.");
-              error.status = 409;
-              throw error;
-            }
-            order.paymentStatus = "Confirmed";
-            order.status = "Paid — processing";
-            order.paymentConfirmedAt = new Date().toISOString();
-          } else if (body.action === "cancel") {
-            if (order.paymentStatus === "Confirmed" || order.status === "Delivered" || order.status === "Cancelled") {
-              const error = new Error("Only an order with unconfirmed payment can be cancelled here.");
-              error.status = 409;
-              throw error;
-            }
-            order.status = "Cancelled";
-          } else {
-            const allowedTransitions = {
-              processing: { from: ["Paid — processing", "Confirmed — payment received"], to: "Processing" },
-              shipped: { from: "Processing", to: "Shipped" },
-              in_transit: { from: "Shipped", to: "In transit" },
-              delivered: { from: "In transit", to: "Delivered" },
-            };
-            const transition = allowedTransitions[body.action];
-            if (!transition || !transition.from.includes(order.status) || order.paymentStatus !== "Confirmed") {
-              const error = new Error("This order must have confirmed payment and be in the previous delivery stage.");
-              error.status = 409;
-              throw error;
-            }
-            order.status = transition.to;
-          }
-          order.updatedAt = new Date().toISOString();
-          updatedOrder = { ...order };
-        });
-        const customerMessage = body.action === "confirm_payment"
-          ? "Your bank transfer has been confirmed. A&M is preparing your order."
-          : `Your order status is now: ${updatedOrder.status}.`;
-        await store.update("users.json", (users) => {
-          const customer = users.find((user) => user.id === updatedOrder.customerId);
-          if (customer) {
-            customer.inbox.unshift({
-              id: randomUUID(),
-              subject: `Order ${updatedOrder.id} update`,
-              message: customerMessage,
-              date: updatedOrder.updatedAt,
-            });
-          }
-        });
+        const updatedOrder = await applyOrderAction(orderId, body.action);
+        await sendOrderStatusNotifications(updatedOrder, body.action);
+        json(response, 200, { order: updatedOrder });
       } catch (error) {
         if (error.status) {
           json(response, error.status, { error: error.message });
@@ -1010,8 +1293,6 @@ function createServer({
         json(response, 500, { error: "We couldn't update the order. Please try again." });
         return;
       }
-      await sendOrderStatusNotifications(updatedOrder, body.action);
-      json(response, 200, { order: updatedOrder });
       return;
     }
 
