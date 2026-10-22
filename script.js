@@ -373,8 +373,8 @@ function renderProducts() {
   const resultText = state.search
     ? `${items.length} ${items.length === 1 ? "find" : "finds"} for you`
     : state.category === "All"
-      ? "Showing all favourites"
-      : `Showing all ${state.category.toLowerCase()}`;
+      ? `${items.length} picks to discover`
+      : `${items.length} ${state.category.toLowerCase()} picks`;
   document.querySelector("#results-count").textContent = resultText;
 }
 
@@ -514,6 +514,24 @@ document.querySelector("#sort-select")?.addEventListener("change", (event) => {
   state.sort = event.target.value;
   renderProducts();
 });
+document.querySelectorAll("[data-app-category]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.category = button.dataset.appCategory;
+    document.querySelectorAll("[data-app-category]").forEach((categoryButton) => {
+      const isActive = categoryButton === button;
+      categoryButton.classList.toggle("active", isActive);
+      categoryButton.setAttribute("aria-pressed", String(isActive));
+    });
+    const title = document.querySelector("#shop-title");
+    if (title) {
+      title.textContent = state.category === "All"
+        ? "Popular picks."
+        : `Popular ${state.category.toLowerCase()} picks.`;
+    }
+    renderProducts();
+    document.querySelector("#shop").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
 document.querySelector("#bag-open").addEventListener("click", openBag);
 document.querySelector("[data-app-bag]")?.addEventListener("click", openBag);
 document.querySelector("#bag-close").addEventListener("click", closeBag);
@@ -629,7 +647,11 @@ document.querySelector("#logout-button")?.addEventListener("click", async () => 
   try {
     await requestApi("/api/logout", { method: "POST" });
     activeCustomer = null;
-    window.location.href = "account.html";
+    if (document.body.classList.contains("user-app-page")) {
+      showAccountAccess("You have been logged out.");
+    } else {
+      window.location.href = "account.html";
+    }
   } catch (error) {
     document.querySelector("#account-message").hidden = false;
     document.querySelector("#account-message").textContent = error.message;
@@ -671,7 +693,8 @@ if (document.body.dataset.category === "Account") {
     }
   });
 }
-document.querySelector("#year").textContent = new Date().getFullYear();
+const yearLabel = document.querySelector("#year");
+if (yearLabel) yearLabel.textContent = new Date().getFullYear();
 document.title = document.body.dataset.category === "Account"
   ? "Your account — A&M"
   : document.body.dataset.home === "true"
@@ -697,9 +720,46 @@ document.querySelectorAll(".main-nav a, .category-links a").forEach((link) => {
     link.removeAttribute("aria-current");
   }
 });
+const appAccountView = document.querySelector("#user-app-account");
+const appScreenButtons = document.querySelectorAll("[data-app-screen]");
+appScreenButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const screen = button.dataset.appScreen;
+    const accountIsOpen = screen === "account";
+    document.querySelectorAll(".user-app-store-view").forEach((view) => {
+      view.hidden = accountIsOpen;
+    });
+    if (appAccountView) appAccountView.hidden = !accountIsOpen;
+    appScreenButtons.forEach((candidate) => {
+      const isActive = candidate === button;
+      candidate.classList.toggle("active", isActive);
+      if (isActive) candidate.setAttribute("aria-current", "page");
+      else candidate.removeAttribute("aria-current");
+    });
+
+    if (accountIsOpen) {
+      if (activeCustomer) {
+        showCustomerProfile(activeCustomer);
+      } else {
+        showAccountAccess("");
+        document.querySelector("#register-tab")?.click();
+        const message = document.querySelector("#account-message");
+        if (message) message.hidden = true;
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.scrollTo({
+        top: screen === "categories" ? document.querySelector("#categories").offsetTop : 0,
+        behavior: "smooth",
+      });
+    }
+  });
+});
 
 loadProducts().catch((error) => {
   console.error("Could not load product catalog:", error);
+  const resultsCount = document.querySelector("#results-count");
+  if (resultsCount) resultsCount.textContent = "We couldn't load the products.";
   if (productGrid) {
     productGrid.hidden = true;
     emptyState.hidden = false;
