@@ -144,6 +144,7 @@ function showOrder(order) {
 }
 
 function renderPickedOrders(orders) {
+  if (!pickedList || !pickedCount) return;
   pickedList.replaceChildren();
   pickedCount.textContent = String(orders.length);
   if (!orders.length) {
@@ -202,7 +203,7 @@ function renderPickedOrders(orders) {
 async function refreshPickedOrders() {
   const result = await requestApi("/api/hub/orders");
   renderPickedOrders(result.orders);
-  pickedFeedback.textContent = "";
+  if (pickedFeedback) pickedFeedback.textContent = "";
 }
 
 async function loadOrder(orderId) {
@@ -317,7 +318,7 @@ loginForm.addEventListener("submit", async (event) => {
     form.reset();
     setHubSignedIn(true);
     refreshPickedOrders().catch((error) => {
-      pickedFeedback.textContent = `Could not load picked orders: ${error.message}`;
+      if (pickedFeedback) pickedFeedback.textContent = `Could not load picked orders: ${error.message}`;
     });
     orderNumberInput.focus();
   } catch (error) {
@@ -346,30 +347,30 @@ searchForm.addEventListener("submit", async (event) => {
   }
 });
 
-document.querySelector("#hub-picked-refresh").addEventListener("click", async (event) => {
+document.querySelector("#hub-picked-refresh")?.addEventListener("click", async (event) => {
   const button = event.currentTarget;
   button.disabled = true;
-  pickedFeedback.textContent = "Refreshing picked orders…";
+  if (pickedFeedback) pickedFeedback.textContent = "Refreshing picked orders…";
   try {
     await refreshPickedOrders();
   } catch (error) {
-    pickedFeedback.textContent = `Could not refresh picked orders: ${error.message}`;
+    if (pickedFeedback) pickedFeedback.textContent = `Could not refresh picked orders: ${error.message}`;
   } finally {
     button.disabled = false;
   }
 });
 
-pickedList.addEventListener("click", async (event) => {
+pickedList?.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-order-id]");
   if (!button) return;
-  pickedFeedback.textContent = `Loading order ${button.dataset.orderId}…`;
+  if (pickedFeedback) pickedFeedback.textContent = `Loading order ${button.dataset.orderId}…`;
   try {
     await loadOrder(button.dataset.orderId);
     feedback.textContent = "";
-    pickedFeedback.textContent = "";
+    if (pickedFeedback) pickedFeedback.textContent = "";
     orderPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    pickedFeedback.textContent = `Could not open this order: ${error.message}`;
+    if (pickedFeedback) pickedFeedback.textContent = `Could not open this order: ${error.message}`;
   }
 });
 
@@ -386,7 +387,7 @@ document.querySelector("#hub-next-step-button").addEventListener("click", async 
     showOrder(result.order);
     feedback.textContent = "Order updated. Email notifications were attempted for the customer and store admin.";
     refreshPickedOrders().catch((error) => {
-      pickedFeedback.textContent = `Order was updated, but picked orders could not refresh: ${error.message}`;
+      if (pickedFeedback) pickedFeedback.textContent = `Order was updated, but picked orders could not refresh: ${error.message}`;
     });
   } catch (error) {
     feedback.textContent = error.message;
@@ -402,9 +403,9 @@ document.querySelector("#hub-logout").addEventListener("click", async (event) =>
     activeOrder = null;
     orderPanel.hidden = true;
     feedback.textContent = "";
-    pickedList.replaceChildren();
-    pickedCount.textContent = "0";
-    pickedFeedback.textContent = "";
+    pickedList?.replaceChildren();
+    if (pickedCount) pickedCount.textContent = "0";
+    if (pickedFeedback) pickedFeedback.textContent = "";
     setHubSignedIn(false);
   } catch (error) {
     feedback.textContent = error.message;
@@ -445,7 +446,7 @@ requestApi("/api/hub/session")
       return;
     }
     refreshPickedOrders().catch((error) => {
-      pickedFeedback.textContent = `Could not load picked orders: ${error.message}`;
+      if (pickedFeedback) pickedFeedback.textContent = `Could not load picked orders: ${error.message}`;
     });
   })
   .catch((error) => {

@@ -29,6 +29,10 @@ When using the JSON-file fallback, attach a persistent disk mounted at `/var/dat
 
 Add the Supabase environment variables listed in [Supabase setup](#supabase-setup) to enable database storage. Brevo email and SMS settings are optional; SMS also requires available Brevo credits. Set `PUBLIC_SITE_URL` to the public Render URL if order emails should include uploaded product images. After deployment, open the Render service URL (not the GitHub Pages URL) and use `/admin.html` for the admin workspace.
 
+### Use the Netlify domain
+
+If the storefront is published on Netlify, keep the Render Web Service running as its backend. `netlify.toml` proxies `/api/*` requests to `https://a-melevent.onrender.com` and maps `/hub.app` and `/hubapp` to the hub app page. Deploy the repository root as the Netlify publish directory so these redirect rules and the site files are included. If the Render service URL changes, update the API proxy target in `netlify.toml` and redeploy Netlify.
+
 ## Admin workspace
 
 The protected admin workspace is at `http://127.0.0.1:3000/admin.html`. Admin credentials are kept separately from customer accounts in the private, ignored `data/admin.json` file. That file contains the admin email and a salted scrypt password hash, never the plain-text password. It is not served by the website. For hosted deployments, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` as private environment variables; use a long, unique password and never commit it.
