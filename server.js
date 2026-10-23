@@ -26,6 +26,7 @@ const MEDIUM_DISTANCE_STATES = new Set(["oyo", "osun", "ondo", "ekiti"]);
 const PRODUCTS_SEED_FILE = path.join(ROOT, "data", "products.json");
 const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 const PRODUCT_CATEGORIES = new Set(["Wigs", "Beauty", "Fragrance", "Shoes"]);
+const HTML_FILES = ["index.html", "shop-all.html", "wigs.html", "beauty.html", "fragrance.html", "shoes.html", "account.html", "checkout.html", "payment.html", "admin.html", "hub.html", "hubapp.html", "user.app.html"];
 const STATIC_FILES = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/admin", ["admin.html", "text/html; charset=utf-8"]],
@@ -34,8 +35,10 @@ const STATIC_FILES = new Map([
   ["/hub.app", ["hubapp.html", "text/html; charset=utf-8"]],
   ["/app", ["user.app.html", "text/html; charset=utf-8"]],
   ["/user.app", ["user.app.html", "text/html; charset=utf-8"]],
-  ...["index.html", "shop-all.html", "wigs.html", "beauty.html", "fragrance.html", "shoes.html", "account.html", "checkout.html", "payment.html", "admin.html", "hub.html", "hubapp.html", "user.app.html"]
-    .map((name) => [`/${name}`, [name, "text/html; charset=utf-8"]]),
+  ...HTML_FILES.flatMap((name) => {
+    const entry = [name, "text/html; charset=utf-8"];
+    return [[`/${name}`, entry], [`/${name.slice(0, -5)}`, entry]];
+  }),
   ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
   ["/script.js", ["script.js", "text/javascript; charset=utf-8"]],
   ["/checkout.js", ["checkout.js", "text/javascript; charset=utf-8"]],

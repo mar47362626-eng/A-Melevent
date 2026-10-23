@@ -772,6 +772,9 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
 
   const checkoutPageResponse = await fetch(`${baseUrl}/checkout.html`);
   assert.equal(checkoutPageResponse.status, 200);
+  const extensionlessCheckoutResponse = await fetch(`${baseUrl}/checkout`);
+  assert.equal(extensionlessCheckoutResponse.status, 200);
+  assert.match(await extensionlessCheckoutResponse.text(), /Checkout — A&M/);
   const paymentPageResponse = await fetch(`${baseUrl}/payment.html`);
   assert.equal(paymentPageResponse.status, 200);
   const adminPageResponse = await fetch(`${baseUrl}/admin.html`);

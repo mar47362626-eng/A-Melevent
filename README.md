@@ -31,7 +31,7 @@ Add the Supabase environment variables listed in [Supabase setup](#supabase-setu
 
 ### Use the Netlify domain
 
-If the storefront is published on Netlify, keep the Render Web Service running as its backend. `netlify.toml` proxies `/api/*` requests to `https://a-melevent.onrender.com` and maps `/hub.app` and `/hubapp` to the hub app page. Deploy the repository root as the Netlify publish directory so these redirect rules and the site files are included. If the Render service URL changes, update the API proxy target in `netlify.toml` and redeploy Netlify.
+If the storefront is published on Netlify, keep the Render Web Service running as its backend. `netlify.toml` proxies `/api/*` requests to `https://a-melevent.onrender.com`, maps `/hub.app` and `/hubapp` to the hub app page, and enables pretty URLs so links such as `/checkout.html` redirect to `/checkout`. Existing `.html` links continue to work. Deploy the repository root as the Netlify publish directory so these settings and the site files are included. If the Render service URL changes, update the API proxy target in `netlify.toml` and redeploy Netlify.
 
 ## Admin workspace
 
