@@ -328,11 +328,13 @@ async function readJsonBody(request, maxBytes = MAX_BODY_BYTES) {
   return body;
 }
 
-function isAllowedOrigin(request) {
+function isAllowedOrigin(request, allowedOrigins) {
   const origin = request.headers.origin;
   if (!origin) return true;
   try {
-    return new URL(origin).host === request.headers.host;
+    const parsedOrigin = new URL(origin);
+    return parsedOrigin.origin === new URL(`http://${request.headers.host}`).origin
+      || allowedOrigins.has(parsedOrigin.origin);
   } catch {
     return false;
   }
@@ -352,11 +354,23 @@ function createServer({
   brevoSmsSender = process.env.BREVO_SMS_SENDER || "AMStore",
   adminSmsNumbers = process.env.BREVO_ADMIN_SMS_NUMBERS || "",
   publicSiteUrl = process.env.PUBLIC_SITE_URL || "",
+  allowedOrigins = process.env.ALLOWED_ORIGINS || "https://amelivated.netlify.app",
   supabaseUrl = process.env.SUPABASE_URL || "",
   supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "",
   supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   fetchImpl = globalThis.fetch,
 } = {}) {
+  const trustedOrigins = new Set(allowedOrigins.split(",").map((origin) => origin.trim()).filter(Boolean).map((origin) => {
+    try {
+      const parsedOrigin = new URL(origin);
+      if (!["http:", "https:"].includes(parsedOrigin.protocol) || parsedOrigin.origin !== origin) {
+        throw new Error();
+      }
+      return parsedOrigin.origin;
+    } catch {
+      throw new Error(`Invalid allowed origin: ${origin}`);
+    }
+  }).filter(Boolean));
   const hasSupabaseSetting = Boolean(supabaseUrl || supabaseAnonKey || supabaseServiceRoleKey);
   if (hasSupabaseSetting && !(supabaseUrl && supabaseAnonKey && supabaseServiceRoleKey)) {
     throw new Error("Supabase requires SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY together.");
@@ -795,7 +809,7 @@ function createServer({
   }
 
   async function handleApi(request, response, url) {
-    if (!isAllowedOrigin(request)) {
+    if (!isAllowedOrigin(request, trustedOrigins)) {
       json(response, 403, { error: "Requests from another website are not allowed." });
       return;
     }

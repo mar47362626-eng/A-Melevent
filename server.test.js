@@ -74,6 +74,7 @@ before(async () => {
   server = createServer({
     dataDir,
     productsFile,
+    allowedOrigins: "https://amelivated.netlify.app",
     brevoApiKey: "",
     brevoSenderEmail: "",
     hubRegistrationCode: "test-hub-invite",
@@ -823,6 +824,24 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
     headers: { Origin: "https://untrusted.example" },
   });
   assert.equal(foreignOriginResponse.status, 403);
+
+  const storefrontOriginResponse = await fetch(`${baseUrl}/api/health`, {
+    headers: { Origin: "https://amelivated.netlify.app" },
+  });
+  assert.equal(storefrontOriginResponse.status, 200);
+  assert.deepEqual(await storefrontOriginResponse.json(), { ok: true });
+
+  for (const route of ["/api/login", "/api/admin/login", "/api/hub/login"]) {
+    const response = await fetch(`${baseUrl}${route}`, {
+      method: "POST",
+      headers: {
+        Origin: "https://amelivated.netlify.app",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: "invalid@example.com", password: "invalid-password" }),
+    });
+    assert.equal(response.status, 401, `${route} should reach authentication, not be blocked by origin validation`);
+  }
 });
 
 test("uses Supabase Auth and service-role credentials only in server-side requests", async () => {

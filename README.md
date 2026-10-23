@@ -27,7 +27,7 @@ In Render, create a Web Service for this repository, leave the build command emp
 
 When using the JSON-file fallback, attach a persistent disk mounted at `/var/data` and set `AM_DATA_DIR=/var/data`; otherwise those records may be lost on restart or redeploy. When Supabase is configured, customer accounts, sessions, orders, products, contact messages, newsletter sign-ups, and uploaded product images are stored in Supabase instead, so a Render disk is not needed for that data. Do not upload the local `data/` records or `.env` file to GitHub.
 
-Add the Supabase environment variables listed in [Supabase setup](#supabase-setup) to enable database storage. Brevo email and SMS settings are optional; SMS also requires available Brevo credits. Set `PUBLIC_SITE_URL` to the public Render URL if order emails should include uploaded product images. After deployment, open the Render service URL (not the GitHub Pages URL) and use `/admin.html` for the admin workspace.
+Add the Supabase environment variables listed in [Supabase setup](#supabase-setup) to enable database storage. Brevo email and SMS settings are optional; SMS also requires available Brevo credits. Set `PUBLIC_SITE_URL` to the public Render URL if order emails should include uploaded product images. `ALLOWED_ORIGINS` is a comma-separated list of trusted browser origins; `https://amelivated.netlify.app` is allowed by default for the Netlify proxy. After deployment, open the Render service URL (not the GitHub Pages URL) and use `/admin.html` for the admin workspace.
 
 ### Use the Netlify domain
 
