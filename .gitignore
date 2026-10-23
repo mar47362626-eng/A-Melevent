@@ -1,4 +1,8 @@
 node_modules/
+.gradle/
+local.properties
+android/app/build/
+dist/
 .env
 .env.*
 !.env.example

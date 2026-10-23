@@ -1,0 +1,39 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+android {
+    namespace = "com.amelevent.app"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.amelevent.app"
+        minSdk = 23
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0.0"
+    }
+
+    flavorDimensions += "app"
+
+    productFlavors {
+        create("shop") {
+            dimension = "app"
+            applicationIdSuffix = ".shop"
+            buildConfigField("String", "START_URL", "\"https://amelivated.netlify.app/user.app\"")
+            resValue("string", "app_name", "A&M Shop")
+        }
+
+        create("hub") {
+            dimension = "app"
+            applicationIdSuffix = ".hub"
+            buildConfigField("String", "START_URL", "\"https://amelivated.netlify.app/hubapp\"")
+            resValue("string", "app_name", "A&M Hub")
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+}

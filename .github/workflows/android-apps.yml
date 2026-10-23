@@ -1,0 +1,82 @@
+name: Build and publish Android apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-apps.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Prepare A&M app icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable-nodpi
+          cp assets/am-app-icon-512.png android/app/src/main/res/drawable-nodpi/am_app_icon.png
+
+      - name: Build both Android APKs
+        working-directory: android
+        run: gradle --no-daemon assembleShopDebug assembleHubDebug
+
+      - name: Prepare shareable downloads
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item android/app/build/outputs/apk/shop/debug/app-shop-debug.apk dist/am-shop-android.apk
+          Copy-Item android/app/build/outputs/apk/hub/debug/app-hub-debug.apk dist/am-hub-android.apk
+          @'
+          A&M APPS - INSTALL GUIDE
+
+          ANDROID
+          Download the APK for the app you need, open the downloaded file, and approve Android's install prompt. If prompted, allow your browser to install apps from this source.
+
+          A&M SHOP
+          Android APK: am-shop-android.apk
+          iPhone or iPad: https://amelivated.netlify.app/user.app
+          On iPhone or iPad, open the link in Safari, tap Share, choose Add to Home Screen, and tap Add.
+
+          A&M HUB (staff)
+          Android APK: am-hub-android.apk
+          iPhone or iPad: https://amelivated.netlify.app/hubapp
+          On iPhone or iPad, open the link in Safari, tap Share, choose Add to Home Screen, and tap Add. Hub sign-in requires a verified staff account.
+          '@ | Set-Content -Path dist/INSTALL.txt -Encoding utf8
+          Compress-Archive -Path dist/am-shop-android.apk,dist/am-hub-android.apk,dist/INSTALL.txt -DestinationPath dist/am-android-apps.zip
+
+      - name: Publish download files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "android-apps-${{ github.run_number }}" \
+            dist/am-shop-android.apk \
+            dist/am-hub-android.apk \
+            dist/am-android-apps.zip \
+            dist/INSTALL.txt \
+            --target "$GITHUB_SHA" \
+            --title "A&M apps for Android and iPhone" \
+            --notes "Android users: download the APK for A&M Shop or A&M Hub, then open it to install. iPhone and iPad users: open the relevant link in Safari, tap Share, and choose Add to Home Screen. Hub access requires a verified staff account."

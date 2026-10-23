@@ -51,6 +51,10 @@ The customer shopping app is at `/user.app` and the staff fulfillment app is at 
 
 App installation requires the deployed site to use HTTPS. The app shell is cached for opening the pages offline, but sign-in, product listings, and order actions still need an internet connection. These are installable web apps, not separate App Store or Google Play downloads.
 
+Android APK downloads are built and published in the [Android apps release page](https://github.com/mar47362626-eng/A-Melevent/releases/latest). Download `am-shop-android.apk` for customers or `am-hub-android.apk` for verified hub staff; `am-android-apps.zip` contains both installers and setup instructions. iPhone and iPad users must use Safari's **Add to Home Screen** for the [shop app](https://amelivated.netlify.app/user.app) or [hub app](https://amelivated.netlify.app/hubapp); installing an iOS App Store package requires Apple's signing and distribution process.
+
+Android APKs are shared outside Google Play. Android may ask users to allow installation from their browser and show its standard verification warning; only install APKs downloaded from the A&M release page.
+
 ## Stored data
 
 Without Supabase credentials, the server creates private JSON files in the configured data directory:
