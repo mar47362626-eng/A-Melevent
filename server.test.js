@@ -781,8 +781,15 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   assert.equal(adminPageResponse.status, 200);
   const userAppResponse = await fetch(`${baseUrl}/user.app.html`);
   assert.equal(userAppResponse.status, 200);
+  assert.equal(userAppResponse.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(userAppResponse.headers.get("x-frame-options"), "DENY");
+  assert.equal(userAppResponse.headers.get("referrer-policy"), "same-origin");
+  assert.equal(userAppResponse.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
+  assert.equal(userAppResponse.headers.get("strict-transport-security"), null);
   const userAppPage = await userAppResponse.text();
   assert.match(userAppPage, /A&M Shop/);
+  assert.match(userAppPage, /manifest\.user\.webmanifest/);
+  assert.match(userAppPage, /app-install\.js/);
   assert.match(userAppPage, /id="product-grid"/);
   assert.match(userAppPage, /data-app-bag/);
   const shortUserAppResponse = await fetch(`${baseUrl}/app`);
@@ -790,10 +797,15 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   const extensionlessUserAppResponse = await fetch(`${baseUrl}/user.app`);
   assert.equal(extensionlessUserAppResponse.status, 200);
   assert.match(await extensionlessUserAppResponse.text(), /id="product-grid"/);
+  const secureProxyResponse = await fetch(`${baseUrl}/user.app`, {
+    headers: { "X-Forwarded-Proto": "https" },
+  });
+  assert.equal(secureProxyResponse.headers.get("strict-transport-security"), "max-age=31536000; includeSubDomains");
   const hubPageResponse = await fetch(`${baseUrl}/hub.html`);
   assert.equal(hubPageResponse.status, 200);
   const hubPage = await hubPageResponse.text();
   assert.match(hubPage, /A&M Fulfillment Hub/);
+  assert.match(hubPage, /href="hubapp\.html">Open the hub app/);
   assert.match(hubPage, /id="hub-fullscreen"/);
   assert.doesNotMatch(hubPage, /Admin workspace/);
   const shortHubPageResponse = await fetch(`${baseUrl}/hub`);
@@ -802,6 +814,8 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   assert.equal(hubAppResponse.status, 200);
   const hubAppPage = await hubAppResponse.text();
   assert.match(hubAppPage, /A&amp;M Hub App/);
+  assert.match(hubAppPage, /manifest\.hub\.webmanifest/);
+  assert.match(hubAppPage, /app-install\.js/);
   assert.match(hubAppPage, /id="hub-items-list"/);
   assert.match(hubAppPage, /id="hub-picked-list"/);
   assert.match(hubAppPage, /Match the photo and quantity/);
@@ -811,6 +825,21 @@ test("keeps private data files inaccessible and rejects foreign origins", async 
   const dottedHubAppResponse = await fetch(`${baseUrl}/hub.app`);
   assert.equal(dottedHubAppResponse.status, 200);
   assert.match(await dottedHubAppResponse.text(), /id="hub-order-number"/);
+  const faviconResponse = await fetch(`${baseUrl}/favicon.svg`);
+  assert.equal(faviconResponse.status, 200);
+  assert.match(faviconResponse.headers.get("content-type"), /image\/svg\+xml/);
+  const shopManifestResponse = await fetch(`${baseUrl}/manifest.user.webmanifest`);
+  assert.equal(shopManifestResponse.status, 200);
+  assert.equal((await shopManifestResponse.json()).start_url, "/user.app");
+  const hubManifestResponse = await fetch(`${baseUrl}/manifest.hub.webmanifest`);
+  assert.equal(hubManifestResponse.status, 200);
+  assert.equal((await hubManifestResponse.json()).start_url, "/hubapp");
+  const appIconResponse = await fetch(`${baseUrl}/assets/am-app-icon-192.png`);
+  assert.equal(appIconResponse.status, 200);
+  assert.match(appIconResponse.headers.get("content-type"), /image\/png/);
+  const serviceWorkerResponse = await fetch(`${baseUrl}/service-worker.js`);
+  assert.equal(serviceWorkerResponse.status, 200);
+  assert.match(await serviceWorkerResponse.text(), /APP_SHELL/);
   const shortAdminPageResponse = await fetch(`${baseUrl}/admin`);
   assert.equal(shortAdminPageResponse.status, 200);
   assert.match(await shortAdminPageResponse.text(), /A&M Admin/);

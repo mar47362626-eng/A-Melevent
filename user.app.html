@@ -8,6 +8,9 @@
       content="Shop A&M's feel-good edit of wigs, beauty, fragrance, and shoes in a mobile-friendly app experience."
     />
     <meta name="theme-color" content="#f8f5f0" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/am-app-icon-192.png" />
+    <link rel="manifest" href="manifest.user.webmanifest" />
     <title>A&M Shop</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,12 +20,17 @@
     />
     <link rel="stylesheet" href="styles.css" />
     <script src="script.js" defer></script>
+    <script src="app-install.js" defer></script>
   </head>
   <body class="user-app-page" data-category="All">
     <header class="user-app-header">
       <a class="brand" href="user.app.html" aria-label="A&M shop home">A<span>&</span>M<span class="brand-dot">.</span></a>
       <span class="user-app-header-label">YOUR EVERYDAY EDIT</span>
       <div class="user-app-header-actions">
+        <div class="app-install-control">
+          <button class="app-install-button" type="button" aria-expanded="false">Install app</button>
+          <p class="app-install-help" hidden>On your iPhone or iPad, open this page in Safari, tap Share, choose <strong>Add to Home Screen</strong>, then tap Add.</p>
+        </div>
         <button class="user-app-bag" id="bag-open" type="button" aria-label="Open shopping bag">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>
           <span>Bag</span><span class="bag-count" id="bag-count">0</span>

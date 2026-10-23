@@ -4,17 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f2ed" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/am-app-icon-192.png" />
+    <link rel="manifest" href="manifest.hub.webmanifest" />
     <meta name="description" content="A&M order-picking and fulfillment app for hub staff." />
     <title>A&amp;M Hub App</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
+    <script src="app-install.js" defer></script>
     <script src="hub.js" defer></script>
   </head>
   <body class="admin-page hub-page hub-app-page">
     <main class="admin-login hub-app-login" id="hub-login">
       <a class="brand" href="index.html" aria-label="A&M home">A<span>&amp;</span>M<span class="brand-dot">.</span></a>
+      <div class="app-install-control">
+        <button class="app-install-button" type="button" aria-expanded="false">Install app</button>
+        <p class="app-install-help" hidden>On your iPhone or iPad, open this page in Safari, tap Share, choose <strong>Add to Home Screen</strong>, then tap Add.</p>
+      </div>
       <span class="eyebrow">A&amp;M HUB APP</span>
       <h1>Ready for the <em>next order?</em></h1>
       <p>Sign in to find orders, check product photos, and safely move confirmed orders through fulfillment.</p>
@@ -54,6 +62,10 @@
             <h1>Order <em>fulfillment.</em></h1>
           </div>
           <div class="hub-header-actions">
+            <div class="app-install-control">
+              <button class="app-install-button" type="button" aria-expanded="false">Install app</button>
+              <p class="app-install-help" hidden>On your iPhone or iPad, open this page in Safari, tap Share, choose <strong>Add to Home Screen</strong>, then tap Add.</p>
+            </div>
             <button type="button" class="admin-text-button" id="hub-fullscreen" aria-pressed="false">Fullscreen</button>
             <button type="button" class="admin-text-button" id="hub-logout">Sign out</button>
           </div>

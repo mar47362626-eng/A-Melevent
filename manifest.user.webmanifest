@@ -1,0 +1,26 @@
+{
+  "id": "/user.app",
+  "name": "A&M Shop",
+  "short_name": "A&M Shop",
+  "description": "Shop A&M's edit of wigs, beauty, fragrance, and shoes.",
+  "start_url": "/user.app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f5f0",
+  "theme_color": "#29251f",
+  "icons": [
+    {
+      "src": "/assets/am-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/am-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

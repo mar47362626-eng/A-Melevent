@@ -1,0 +1,26 @@
+{
+  "id": "/hubapp",
+  "name": "A&M Hub",
+  "short_name": "A&M Hub",
+  "description": "A&M order-picking and fulfillment app for hub staff.",
+  "start_url": "/hubapp",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f2ed",
+  "theme_color": "#29251f",
+  "icons": [
+    {
+      "src": "/assets/am-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/am-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

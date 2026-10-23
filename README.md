@@ -29,6 +29,8 @@ When using the JSON-file fallback, attach a persistent disk mounted at `/var/dat
 
 Add the Supabase environment variables listed in [Supabase setup](#supabase-setup) to enable database storage. Brevo email and SMS settings are optional; SMS also requires available Brevo credits. Set `PUBLIC_SITE_URL` to the public Render URL if order emails should include uploaded product images. `ALLOWED_ORIGINS` is a comma-separated list of trusted browser origins; `https://amelivated.netlify.app` is allowed by default for the Netlify proxy. After deployment, open the Render service URL (not the GitHub Pages URL) and use `/admin.html` for the admin workspace.
 
+The Netlify site and Node.js server send browser security headers to prevent MIME-type guessing and framing, restrict referrer information, and disable unused camera, microphone, and location permissions. HTTPS responses also enable HSTS. Keep the production website on HTTPS; these protections reduce common browser-based attack risks but do not replace secure credentials, timely updates, or careful account access.
+
 ### Use the Netlify domain
 
 If the storefront is published on Netlify, keep the Render Web Service running as its backend. `netlify.toml` proxies `/api/*` requests to `https://a-melevent.onrender.com`, maps `/hub.app` and `/hubapp` to the hub app page, and enables pretty URLs. Requests for `/checkout.html` (and other `.html` pages) redirect to clean URLs such as `/checkout`, while old links continue to work. Deploy the repository root as the Netlify publish directory so these settings and the site files are included. If the Render service URL changes, update the API proxy target in `netlify.toml` and redeploy Netlify.
@@ -42,6 +44,12 @@ The workspace includes order, product, customer, and contact-message views. Admi
 ## Fulfillment hub
 
 The staff-only fulfillment page is available at `/hub.html`. Set a long, private `HUB_REGISTRATION_CODE` in Render and share it only with trusted staff. Each staff member registers using their own email, a password of at least 10 characters, and the invitation code, then verifies their email using a code sent through Brevo. Hub accounts use a separate, restricted session and cannot access the admin workspace. Hub staff can look up an order by its order number, review its items and delivery details, mark it picked, then advance it through shipped, in transit, and delivered. Payment must be confirmed and the order started in the admin workspace before the hub can fulfill it. Status changes appear in the customer's existing order history. When an order is marked picked, the customer and the configured admin email (`BREVO_ADMIN_EMAIL`, default `ayomideoluniyi49@gmail.com`) both receive an email notification. Configure `BREVO_API_KEY` and `BREVO_SENDER_EMAIL` in Render for verification and order emails.
+
+## Install the A&M apps
+
+The customer shopping app is at `/user.app` and the staff fulfillment app is at `/hubapp`. Open the relevant link on the phone where you want to install it. On Android, use Chrome's **Install app** button or browser install prompt. On iPhone and iPad, open the page in Safari, tap **Share**, choose **Add to Home Screen**, and tap **Add**. Both apps use the A&M monogram as their home-screen icon and can open in a standalone app window.
+
+App installation requires the deployed site to use HTTPS. The app shell is cached for opening the pages offline, but sign-in, product listings, and order actions still need an internet connection. These are installable web apps, not separate App Store or Google Play downloads.
 
 ## Stored data
 

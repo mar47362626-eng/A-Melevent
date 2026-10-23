@@ -1,6 +1,15 @@
 [build.processing.html]
   pretty_urls = true
 
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "same-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
 [[redirects]]
   from = "/api/*"
   to = "https://a-melevent.onrender.com/api/:splat"

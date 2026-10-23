@@ -654,6 +654,12 @@ body.drawer-open { overflow: hidden; }
 .user-app-header .brand { font-size: 28px; }
 .user-app-header-label { margin-right: auto; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .16em; }
 .user-app-header-actions { display: flex; align-items: center; gap: 16px; }
+.app-install-control { position: relative; }
+.app-install-button { min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--ink); cursor: pointer; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.app-install-button:hover { border-color: var(--accent); color: var(--accent); }
+.app-install-help { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: min(280px, calc(100vw - 32px)); margin: 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: #fffdf9; box-shadow: 0 8px 28px rgb(41 37 31 / 12%); color: var(--muted); font-size: 11px; line-height: 1.6; }
+.app-install-help[hidden] { display: none !important; }
+.app-install-help strong { color: var(--ink); }
 .user-app-bag { display: flex; align-items: center; gap: 7px; padding: 8px 0; border: 0; background: transparent; cursor: pointer; font-size: 12px; }
 .user-app-bag svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .user-app-main { width: min(100%, 1040px); margin: 0 auto; padding: 20px clamp(16px, 4vw, 36px) 42px; }
@@ -798,6 +804,7 @@ body.drawer-open { overflow: hidden; }
 .hub-app-page { min-height: 100vh; padding: 0; background: #f5f2ed; }
 .hub-app-login { width: min(calc(100% - 28px), 410px); margin: 24px auto; padding: clamp(20px, 5vw, 34px); border-radius: 16px; }
 .hub-app-login > .brand { margin-bottom: 24px; }
+.hub-app-login > .app-install-control { margin: -10px 0 20px; }
 .hub-app-login h1 { font-size: clamp(29px, 7vw, 40px); }
 .hub-app-login input { min-height: 42px; border-radius: 9px; }
 .hub-app-login form .button { min-height: 43px; border-radius: 9px; }

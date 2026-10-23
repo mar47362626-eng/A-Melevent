@@ -41,9 +41,16 @@ const STATIC_FILES = new Map([
   }),
   ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
   ["/script.js", ["script.js", "text/javascript; charset=utf-8"]],
+  ["/app-install.js", ["app-install.js", "text/javascript; charset=utf-8"]],
+  ["/service-worker.js", ["service-worker.js", "text/javascript; charset=utf-8"]],
   ["/checkout.js", ["checkout.js", "text/javascript; charset=utf-8"]],
   ["/admin.js", ["admin.js", "text/javascript; charset=utf-8"]],
   ["/hub.js", ["hub.js", "text/javascript; charset=utf-8"]],
+  ["/favicon.svg", ["favicon.svg", "image/svg+xml"]],
+  ["/manifest.user.webmanifest", ["manifest.user.webmanifest", "application/manifest+json; charset=utf-8"]],
+  ["/manifest.hub.webmanifest", ["manifest.hub.webmanifest", "application/manifest+json; charset=utf-8"]],
+  ["/assets/am-app-icon-192.png", ["assets/am-app-icon-192.png", "image/png"]],
+  ["/assets/am-app-icon-512.png", ["assets/am-app-icon-512.png", "image/png"]],
 ]);
 const ADMIN_ORDER_ACTIONS = new Set(["confirm_payment", "processing", "picked", "shipped", "in_transit", "delivered", "cancel"]);
 
@@ -1713,6 +1720,11 @@ function createServer({
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "same-origin");
     response.setHeader("X-Frame-Options", "DENY");
+    response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    const forwardedProtocol = request.headers["x-forwarded-proto"]?.split(",")[0].trim();
+    if (request.socket.encrypted || forwardedProtocol === "https") {
+      response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
     try {
       const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
       if (url.hostname === "localhost" && (request.method === "GET" || request.method === "HEAD")) {
