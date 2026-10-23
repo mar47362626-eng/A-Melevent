@@ -14,8 +14,74 @@
   force = true
 
 [[redirects]]
-  from = "/:page.html"
-  to = "/:page"
+  from = "/shop-all.html"
+  to = "/shop-all"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/wigs.html"
+  to = "/wigs"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/beauty.html"
+  to = "/beauty"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/fragrance.html"
+  to = "/fragrance"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/shoes.html"
+  to = "/shoes"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/account.html"
+  to = "/account"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/checkout.html"
+  to = "/checkout"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/payment.html"
+  to = "/payment"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/admin.html"
+  to = "/admin"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/hub.html"
+  to = "/hub"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/hubapp.html"
+  to = "/hubapp"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/user.app.html"
+  to = "/user.app"
   status = 301
   force = true
 
