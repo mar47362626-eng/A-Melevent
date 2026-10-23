@@ -8,6 +8,18 @@
   force = true
 
 [[redirects]]
+  from = "/index.html"
+  to = "/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/:page.html"
+  to = "/:page"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/hub.app"
   to = "/hubapp.html"
   status = 200
